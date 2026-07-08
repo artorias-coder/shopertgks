@@ -14,10 +14,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bothost")
 
+print("BOTHOST_STARTUP: entering bothost.py", flush=True)
+
 try:
     from app.config import settings
 except Exception as e:
     logger.exception("Failed to load settings")
+    print(f"BOTHOST_FATAL: {e}", file=sys.stderr, flush=True)
+    print("BOTHOST_HINT: set BOT_TOKEN and DATABASE_URL env vars", file=sys.stderr, flush=True)
     sys.exit(1)
 
 

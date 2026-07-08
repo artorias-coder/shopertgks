@@ -23,8 +23,8 @@ class Settings(BaseSettings):
         return int(self.SUPERADMIN_ID)
 
     DATABASE_URL: str
-    DATABASE_URL_SYNC: str
-    REDIS_URL: str
+    DATABASE_URL_SYNC: str | None = None
+    REDIS_URL: str | None = None
 
     GOOGLE_SHEETS_ID: str | None = None
     GOOGLE_CREDENTIALS_JSON: str | None = None
