@@ -1,6 +1,6 @@
 import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
@@ -10,7 +10,15 @@ from app.database import get_db
 from app.models import Product, Order, OrderItem, OrderStatus, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus, TradeIn, Giveaway, User
 from app.services.google_sheets import sync_products
 from app.services.livesklad import create_livesklad_order
+from app.services.telegram_webapp import validate_init_data
 from app.tasks import sync_google_sheets
+
+
+def verify_telegram_init_data(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
+    if not x_telegram_init_data:
+        raise HTTPException(status_code=401, detail="Missing Telegram init data")
+    if not validate_init_data(x_telegram_init_data):
+        raise HTTPException(status_code=403, detail="Invalid Telegram init data")
 
 router = APIRouter()
 
@@ -149,7 +157,11 @@ class OrderCreate(BaseModel):
 
 
 @router.post("/orders")
-async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get_db)):
+async def create_order(
+    payload: OrderCreate,
+    session: AsyncSession = Depends(get_db),
+    _=Depends(verify_telegram_init_data),
+):
     # find or create user
     result = await session.execute(select(User).where(User.telegram_id == payload.telegram_id))
     user = result.scalar_one_or_none()

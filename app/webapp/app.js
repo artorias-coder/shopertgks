@@ -579,7 +579,10 @@ function bindEvents() {
         try {
             const res = await fetch(`${API_URL}/orders`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': app.tg.initData || '',
+                },
                 body: JSON.stringify(payload),
             });
             const data = await res.json();
