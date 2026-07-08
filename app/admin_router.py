@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
+import filetype
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, validator
@@ -261,14 +262,24 @@ async def upload_image(
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files allowed")
-    ext = Path(file.filename or "").suffix.lower() or ".jpg"
-    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
-        ext = ".jpg"
-    filename = f"{uuid.uuid4().hex}{ext}"
-    dest = UPLOADS_DIR / filename
+
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+
+    kind = filetype.guess(content)
+    if not kind or not kind.mime.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    ext = Path(file.filename or "").suffix.lower()
+    allowed_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    if ext not in allowed_exts:
+        ext = f".{kind.extension}"
+    if ext not in allowed_exts:
+        ext = ".jpg"
+
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = UPLOADS_DIR / filename
     with open(dest, "wb") as f:
         f.write(content)
     url = f"/webapp/uploads/{filename}"

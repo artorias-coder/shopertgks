@@ -14,3 +14,4 @@ python-dotenv==1.0.1
 psycopg2-binary==2.9.10
 aiosqlite==0.21.0
 python-multipart==0.0.20
+filetype==1.2.0

@@ -55,7 +55,7 @@ async function loadCategories() {
     const cats = await api('/categories');
     $('categories-list').innerHTML = cats.map(c => `
         <div class="category-edit" data-id="${c.id}">
-            <img src="${c.image_url || ''}" alt="" onerror="this.style.display='none'">
+            <img src="${escapeHtml(c.image_url || '')}" alt="" onerror="this.style.display='none'">
             <div class="form-row">
                 <label>Название</label>
                 <input type="text" class="edit-cat-name" value="${escapeHtml(c.name)}">

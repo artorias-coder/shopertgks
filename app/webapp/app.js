@@ -79,7 +79,7 @@ function getProductImagePlaceholder(name) {
 function getProductImage(product, variant = 'card') {
     if (product.photo_url) {
         const cls = variant === 'detail' ? 'product-detail-img' : 'product-img';
-        return `<img class="${cls}" src="${product.photo_url}" alt="${escapeHtml(product.name)}" onerror="this.outerHTML=getProductImagePlaceholder('${escapeJsString(product.category || '')}')">`;
+        return `<img class="${cls}" src="${escapeHtml(product.photo_url)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.outerHTML=getProductImagePlaceholder('${escapeJsString(product.category || '')}')">`;
     }
     return getProductImagePlaceholder(product.category || product.name);
 }
