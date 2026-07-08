@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, Request, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
 import logging
 
 from app.database import get_db, engine
@@ -9,17 +10,20 @@ from app.models import Base
 from app.api.routers import router as api_router
 from app.config import settings
 
+WEBAPP_DIR = Path(__file__).resolve().parent / "webapp"
+INDEX_HTML = WEBAPP_DIR / "index.html"
+
 bot = None
 dp = None
 
 app = FastAPI(title="KingStore API")
 app.include_router(api_router, prefix="/api")
-app.mount("/webapp", StaticFiles(directory="app/webapp", html=True), name="webapp")
+app.mount("/webapp", StaticFiles(directory=str(WEBAPP_DIR), html=True), name="webapp")
 
 
 @app.get("/")
 async def root():
-    return FileResponse("app/webapp/index.html")
+    return FileResponse(str(INDEX_HTML))
 
 
 @app.on_event("startup")
