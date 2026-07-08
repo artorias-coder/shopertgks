@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>KINGSTORE</title>
+    <link rel="stylesheet" href="/webapp/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="logo">KINGSTORE</div>
+        </header>
+
+        <main id="main">
+            <!-- Home screen -->
+            <section id="home" class="screen active">
+                <div class="shops-row" id="shops-row"></div>
+
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Поиск iPhone, MacBook, AirPods...">
+                </div>
+
+                <div class="quick-actions">
+                    <div class="action-card" data-action="tradein">
+                        <div class="action-title">Trade-in</div>
+                        <div class="action-desc">Обменяйте старое на новое с выгодой до 80.000 ₽</div>
+                        <div class="action-sub">Оценка за 1 минуту</div>
+                    </div>
+                    <div class="action-card" data-action="contact">
+                        <div class="action-title">Узнать лучшую цену / Написать</div>
+                        <div class="action-desc">Оставьте заявку — менеджер скоро свяжется</div>
+                        <div class="action-sub">менеджеру</div>
+                    </div>
+                </div>
+
+                <div class="section-title">Категории</div>
+                <div class="categories-grid" id="categories-grid"></div>
+            </section>
+
+            <!-- Catalog screen -->
+            <section id="catalog" class="screen">
+                <div class="back-bar">
+                    <button id="back-home" class="back-btn">← Назад</button>
+                    <div class="catalog-title" id="catalog-title">Каталог</div>
+                </div>
+                <div class="products-grid" id="products-grid"></div>
+            </section>
+
+            <!-- Product screen -->
+            <section id="product" class="screen">
+                <div class="back-bar">
+                    <button id="back-catalog" class="back-btn">← Назад</button>
+                </div>
+                <div id="product-detail"></div>
+            </section>
+
+            <!-- Cart screen -->
+            <section id="cart" class="screen">
+                <div class="back-bar">
+                    <button id="back-cart" class="back-btn">← Назад</button>
+                    <div class="catalog-title">Корзина</div>
+                </div>
+                <div id="cart-content"></div>
+            </section>
+
+            <!-- Order form -->
+            <section id="order" class="screen">
+                <div class="back-bar">
+                    <button id="back-order" class="back-btn">← Назад</button>
+                    <div class="catalog-title">Оформление</div>
+                </div>
+                <form id="order-form" class="order-form">
+                    <label>Имя <input type="text" id="order-name" required></label>
+                    <label>Телефон <input type="tel" id="order-phone" required></label>
+                    <label>Город <input type="text" id="order-city" required></label>
+                    <label>Способ получения
+                        <select id="order-delivery">
+                            <option value="Самовывоз">Самовывоз</option>
+                            <option value="Доставка по городу">Доставка по городу</option>
+                            <option value="Доставка почтой/курьером">Доставка почтой/курьером</option>
+                            <option value="Индивидуальное согласование">Индивидуальное согласование</option>
+                        </select>
+                    </label>
+                    <label>Филиал
+                        <select id="order-shop" required></select>
+                    </label>
+                    <label>Комментарий <textarea id="order-comment" rows="2"></textarea></label>
+                    <button type="submit" class="submit-btn">Отправить заказ</button>
+                </form>
+            </section>
+
+            <!-- Success screen -->
+            <section id="success" class="screen">
+                <div class="success-box">
+                    <div class="success-icon">✅</div>
+                    <div class="success-title">Заказ принят!</div>
+                    <div class="success-text" id="success-text"></div>
+                    <button id="success-home" class="submit-btn">На главную</button>
+                </div>
+            </section>
+        </main>
+
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-screen="home">🏠<span>Главная</span></button>
+            <button class="nav-btn" data-screen="catalog">📱<span>Каталог</span></button>
+            <button class="nav-btn" id="nav-cart">🛒<span>Корзина</span><span class="cart-badge" id="cart-badge">0</span></button>
+        </nav>
+    </div>
+
+    <script src="/webapp/app.js"></script>
+</body>
+</html>
