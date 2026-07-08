@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Enum,
     Boolean,
+    JSON,
     func,
     UniqueConstraint,
 )
@@ -113,6 +114,21 @@ class ProductStock(Base):
     __table_args__ = (UniqueConstraint("product_id", "shop_id", name="uix_product_shop_stock"),)
 
 
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    image_url = Column(String(1000), nullable=True)
+    icon_emoji = Column(String(50), nullable=True)
+    tile_size = Column(String(20), default="medium", nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -123,6 +139,9 @@ class Product(Base):
     category = Column(String(200), nullable=True)
     subcategory = Column(String(200), nullable=True)
     description = Column(Text, nullable=True)
+    color = Column(String(100), nullable=True)
+    memory = Column(String(50), nullable=True)
+    specs = Column(JSON, nullable=True)
     price = Column(Numeric(12, 2), nullable=False)
     old_price = Column(Numeric(12, 2), nullable=True)
     discount = Column(Numeric(12, 2), nullable=True)

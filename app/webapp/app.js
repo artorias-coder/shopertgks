@@ -1,5 +1,17 @@
 const API_URL = '/api';
 
+const STATUS_LABELS = {
+    'new': 'Новый',
+    'confirmed': 'Подтверждён',
+    'in_progress': 'В обработке',
+    'ready': 'Готов к выдаче',
+    'delivering': 'Доставляется',
+    'completed': 'Выполнен',
+    'cancelled': 'Отменён',
+    'pending_sync': 'Ожидает синхронизации',
+    'sync_error': 'Ошибка синхронизации',
+};
+
 const CATEGORY_ICONS = {
     'iPhone': '📱',
     'iPad': '📲',
@@ -35,16 +47,19 @@ const app = {
 };
 
 function getCategoryIcon(name) {
+    if (!name) return CATEGORY_ICONS.default;
     const key = Object.keys(CATEGORY_ICONS).find(k => name.toLowerCase().includes(k.toLowerCase()));
     return CATEGORY_ICONS[key || 'default'];
 }
 
 function getCategoryDesc(name) {
+    if (!name) return CATEGORY_DESC.default;
     const key = Object.keys(CATEGORY_DESC).find(k => name.toLowerCase().includes(k.toLowerCase()));
     return CATEGORY_DESC[key || 'default'];
 }
 
 function getParentCategory(name) {
+    if (!name) return 'iPhone';
     const lower = name.toLowerCase();
     if (lower.includes('iphone')) return 'iPhone';
     if (lower.includes('ipad')) return 'iPad';
@@ -61,14 +76,37 @@ function getProductImagePlaceholder(name) {
     return `<div class="product-img-placeholder">${emoji}</div>`;
 }
 
+function getProductImage(product, variant = 'card') {
+    if (product.photo_url) {
+        const cls = variant === 'detail' ? 'product-detail-img' : 'product-img';
+        return `<img class="${cls}" src="${product.photo_url}" alt="${escapeHtml(product.name)}" onerror="this.outerHTML=getProductImagePlaceholder('${escapeJsString(product.category || '')}')">`;
+    }
+    return getProductImagePlaceholder(product.category || product.name);
+}
+
 function getProductTags(p) {
     const tags = [];
-    if (p.category) tags.push('Apple');
-    if (p.name.toLowerCase().includes('esim')) tags.push('Apple iPhone 17 (eSim)');
-    if (p.name.toLowerCase().includes('new') || p.name.toLowerCase().includes('новый')) tags.push('New');
-    if (p.name.toLowerCase().includes('ru') || p.description?.toLowerCase().includes('rustore')) tags.push('Без RuStore');
+    if (p.category && p.category.toLowerCase().includes('iphone')) tags.push('Apple');
+    if (p.name.toLowerCase().includes('esim')) tags.push('eSIM');
+    if (p.color) tags.push(p.color);
+    if (p.memory) tags.push(p.memory);
     if (tags.length === 0) tags.push(p.category || 'Apple');
     return tags.slice(0, 4);
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function escapeJsString(text) {
+    if (!text) return '';
+    return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
 function init() {
@@ -85,6 +123,9 @@ function init() {
         renderHome();
         renderCategoryChips();
         bindEvents();
+    }).catch(err => {
+        console.error('loadData error:', err);
+        document.getElementById('categories-grid').innerHTML = '<div class="empty-state">Ошибка загрузки данных</div>';
     });
 }
 
@@ -103,11 +144,14 @@ async function loadData() {
 }
 
 function getHomeCategories() {
+    if (app.categories.length > 0) {
+        return app.categories.filter(c => c.name).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
+    }
     const parents = new Set();
     app.products.forEach(p => {
         if (p.category) parents.add(getParentCategory(p.category));
     });
-    return Array.from(parents).sort();
+    return Array.from(parents).sort().map(name => ({ name }));
 }
 
 function renderHome() {
@@ -119,23 +163,38 @@ function renderHome() {
         return;
     }
 
-    categoriesGrid.innerHTML = homeCategories.map(c => `
-        <div class="category-card" data-category="${c}">
-            <div class="category-icon">${getCategoryIcon(c)}</div>
-            <div class="category-info">
-                <div class="category-name">${c}</div>
-                <div class="category-desc">${getCategoryDesc(c)}</div>
+    categoriesGrid.innerHTML = homeCategories.map(c => {
+        const name = c.name || c;
+        const desc = c.description || getCategoryDesc(name);
+        const image = c.image_url ? `<img class="category-img" src="${c.image_url}" alt="${escapeHtml(name)}" loading="lazy" onerror="this.style.display='none'">` : '';
+        const icon = !c.image_url ? `<div class="category-icon">${c.icon_emoji || getCategoryIcon(name)}</div>` : '';
+        const tileClass = `category-card category-tile-${c.tile_size || 'medium'}`;
+        return `
+        <div class="${tileClass}" data-category="${escapeHtml(name)}">
+            <div class="category-left">
+                ${image}
+                ${icon}
+                <div class="category-info">
+                    <div class="category-name">${escapeHtml(name)}</div>
+                    <div class="category-desc">${escapeHtml(desc)}</div>
+                </div>
             </div>
+            <div class="category-arrow">›</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function showScreen(name) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(name).classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    if (name === 'home') document.querySelector('[data-screen="home"]')?.classList.add('active');
-    if (name === 'catalog') document.querySelector('[data-screen="catalog"]')?.classList.add('active');
+    const navMap = { home: 'home', catalog: 'catalog', cart: 'nav-cart', orders: 'nav-orders' };
+    const navSelector = navMap[name];
+    if (navSelector) {
+        const el = navSelector.startsWith('nav-') ? document.getElementById(navSelector) : document.querySelector(`[data-screen="${navSelector}"]`);
+        el?.classList.add('active');
+    }
 }
 
 function getCategoryCount(category) {
@@ -157,7 +216,7 @@ function renderCategoryChips() {
     chips.innerHTML = allCategories.map(c => {
         const count = c === 'Все' ? app.products.length : (counts[c] || 0);
         const active = (c === 'Все' && !app.currentCategory) || c === app.currentCategory ? 'active' : '';
-        return `<div class="chip ${active}" data-category="${c}">${c}<span class="chip-count">${count}</span></div>`;
+        return `<div class="chip ${active}" data-category="${escapeHtml(c)}">${escapeHtml(c)}<span class="chip-count">${count}</span></div>`;
     }).join('');
 }
 
@@ -190,20 +249,19 @@ function renderCatalog(category, search = '') {
     }
 
     grid.innerHTML = filtered.map(p => {
-        const img = p.photo_url
-            ? `<img class="product-img" src="${p.photo_url}" alt="${p.name}" onerror="this.outerHTML=getProductImagePlaceholder('${p.category || ''}')">`
-            : getProductImagePlaceholder(p.category || p.name);
+        const img = getProductImage(p, 'card');
         const oldPrice = p.old_price
             ? `<div class="product-old-price">${formatPrice(p.old_price)} ₽</div>`
             : '';
+        const tags = getProductTags(p).map(t => `<span class="product-tag-small">${escapeHtml(t)}</span>`).join('');
         return `
         <div class="product-card" data-product-id="${p.id}">
             ${img}
             <div class="product-info">
-                <div class="product-name">${p.name}</div>
+                <div class="product-name">${escapeHtml(p.name)}</div>
                 ${oldPrice}
                 <div class="product-price">${formatPrice(p.price)} ₽</div>
-                <div class="product-stock">${p.stock > 0 ? 'В наличии' : 'Нет в наличии'}</div>
+                <div class="product-tags-row">${tags}</div>
             </div>
         </div>
         `;
@@ -214,56 +272,58 @@ function renderProduct(productId) {
     const p = app.products.find(x => x.id === productId);
     if (!p) return;
     const container = document.getElementById('product-detail');
-    const img = p.photo_url
-        ? `<img class="product-detail-img" src="${p.photo_url}" alt="${p.name}" onerror="this.outerHTML=getProductImagePlaceholder('${p.category || ''}')">`
-        : getProductImagePlaceholder(p.category || p.name).replace('product-img-placeholder', 'product-detail-img-placeholder');
+    const img = getProductImage(p, 'detail');
 
     const oldPrice = p.old_price
         ? `<div class="product-detail-old-price">${formatPrice(p.old_price)} ₽</div>`
         : '';
 
-    const tags = getProductTags(p).map(t => `<span class="product-tag">${t}</span>`).join('');
+    const tags = getProductTags(p).map(t => `<span class="product-tag">${escapeHtml(t)}</span>`).join('');
 
-    const specs = [
-        ['Серия', getParentCategory(p.category || 'iPhone')],
-        ['Память', extractMemory(p.name) || '—'],
-        ['Диагональ', '6.3"'],
-        ['Разрешение', '2622 × 1206 пикселей'],
-    ];
+    const specsMap = p.specs && typeof p.specs === 'object' ? p.specs : {};
+    let specsHtml = '';
+    for (const [section, fields] of Object.entries(specsMap)) {
+        if (typeof fields !== 'object' || fields === null) continue;
+        const rows = Object.entries(fields).map(([k, v]) => `
+            <tr><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>
+        `).join('');
+        if (!rows) continue;
+        specsHtml += `
+            <div class="product-section">
+                <div class="product-section-title">${escapeHtml(section)}</div>
+                <table class="product-specs">${rows}</table>
+            </div>
+        `;
+    }
+    if (!specsHtml) {
+        specsHtml = `<div class="product-section"><div class="product-section-title">Характеристики</div><table class="product-specs"><tr><td>Модель</td><td>${escapeHtml(p.name)}</td></tr></table></div>`;
+    }
 
-    const specsRows = specs.map(([k, v]) => `
-        <tr><td>${k}</td><td>${v}</td></tr>
-    `).join('');
+    const colorHtml = p.color ? `<div class="product-color-line"><span class="product-color-dot"></span> ${escapeHtml(p.color)}</div>` : '';
 
     container.innerHTML = `
         <div class="product-detail">
             ${img}
             <div class="product-detail-body">
-                <div class="product-detail-name">${p.name}</div>
+                <div class="product-detail-name">${escapeHtml(p.name)}</div>
+                ${colorHtml}
                 <div class="product-detail-price">${formatPrice(p.price)} ₽</div>
                 ${oldPrice}
                 <div class="product-tags">${tags}</div>
 
                 <div class="product-section">
                     <div class="product-section-title">Описание</div>
-                    <div class="product-section-text">${p.description || (p.name + ' — отличный выбор. Свяжитесь с менеджером для уточнения деталей.')}</div>
+                    <div class="product-section-text">${escapeHtml(p.description || (p.name + ' — отличный выбор. Свяжитесь с менеджером для уточнения деталей.'))}</div>
                 </div>
 
-                <div class="product-section">
-                    <div class="product-section-title">Характеристики</div>
-                    <table class="product-specs">${specsRows}</table>
-                </div>
-
+                ${specsHtml}
+            </div>
+            <div class="product-actions">
                 <button class="add-to-cart-btn" data-product-id="${p.id}">В корзину</button>
                 <button class="order-btn" data-product-id="${p.id}">Заказать</button>
             </div>
         </div>
     `;
-}
-
-function extractMemory(name) {
-    const match = name.match(/(\d+\s*(GB|Gb|гб|ГБ|TB|Tb|тб|ТБ))/i);
-    return match ? match[1] : '';
 }
 
 function renderCart() {
@@ -280,7 +340,7 @@ function renderCart() {
         return `
             <div class="cart-item">
                 <div class="cart-item-info">
-                    <div class="cart-item-name">${product.name}</div>
+                    <div class="cart-item-name">${escapeHtml(product.name)}</div>
                     <div class="cart-item-price">${item.quantity} шт. × ${formatPrice(product.price)} ₽ = ${formatPrice(itemTotal)} ₽</div>
                 </div>
                 <button class="cart-item-remove" data-product-id="${item.product_id}">🗑️</button>
@@ -293,6 +353,45 @@ function renderCart() {
     `;
 }
 
+async function renderOrders() {
+    const container = document.getElementById('orders-content');
+    container.innerHTML = '<div class="loading">Загрузка заказов...</div>';
+    try {
+        const telegramId = app.user ? app.user.id : 0;
+        const res = await fetch(`${API_URL}/orders?telegram_id=${telegramId}`);
+        const orders = await res.json();
+        if (!orders.length) {
+            container.innerHTML = '<div class="empty-state">У вас пока нет заказов</div>';
+            return;
+        }
+        container.innerHTML = orders.map(o => {
+            const items = o.items.map(i => `${i.quantity} × ${escapeHtml(i.name)}`).join(', ');
+            const status = STATUS_LABELS[o.status] || o.status;
+            return `
+            <div class="order-card">
+                <div class="order-header">
+                    <div class="order-number">№ ${escapeHtml(o.number)}</div>
+                    <div class="order-status status-${o.status}">${escapeHtml(status)}</div>
+                </div>
+                <div class="order-date">${formatDate(o.created_at)}</div>
+                <div class="order-items">${escapeHtml(items)}</div>
+                <div class="order-shop">${escapeHtml(o.shop || '')}</div>
+                <div class="order-total">${formatPrice(o.total)} ₽</div>
+                <div class="order-sync">CRM: ${o.sync_status === 'success' ? 'создан' : escapeHtml(o.sync_status)}</div>
+            </div>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = '<div class="empty-state">Не удалось загрузить заказы</div>';
+    }
+}
+
+function formatDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU');
+}
+
 function updateCartBadge() {
     const badge = document.getElementById('cart-badge');
     const count = app.cart.reduce((sum, i) => sum + i.quantity, 0);
@@ -302,7 +401,7 @@ function updateCartBadge() {
 
 function renderOrderForm() {
     const select = document.getElementById('order-shop');
-    select.innerHTML = app.shops.map(s => `<option value="${s.id}" ${app.selectedShop && app.selectedShop.id === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
+    select.innerHTML = app.shops.map(s => `<option value="${s.id}" ${app.selectedShop && app.selectedShop.id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
 
     if (app.user) {
         document.getElementById('order-name').value = app.user.first_name || '';
@@ -322,6 +421,26 @@ function addToCart(productId) {
     }
 }
 
+const TRADEIN_DEVICES = [
+    { type: 'iPhone', name: 'iPhone', models: 'От XR и новее', image: '/webapp/images/cat-iphone.jpg', color: '#f3e8ff' },
+    { type: 'iPad', name: 'iPad', models: '8-12 / mini / Air / Pro', image: '/webapp/images/cat-ipad.jpg', color: '#e0f2fe' },
+    { type: 'Apple Watch', name: 'Apple Watch', models: 'SE 1-2 / S8-S10 / Ultra 1-2', image: '/webapp/images/cat-watch.jpg', color: '#ffe4e6' },
+    { type: 'MacBook', name: 'MacBook', models: 'Air 13/15, Pro 13/14/16', image: '/webapp/images/cat-mac.jpg', color: '#d1fae5' },
+];
+
+function renderTradeIn() {
+    const grid = document.getElementById('tradein-devices');
+    grid.innerHTML = TRADEIN_DEVICES.map(d => `
+        <div class="tradein-device" data-type="${escapeHtml(d.type)}">
+            <div class="tradein-device-img-wrap" style="background:${d.color}">
+                <img src="${d.image}" alt="${escapeHtml(d.name)}" loading="lazy" onerror="this.style.display='none'">
+            </div>
+            <div class="tradein-device-name">${escapeHtml(d.name)}</div>
+            <div class="tradein-device-models">${escapeHtml(d.models)}</div>
+        </div>
+    `).join('');
+}
+
 function formatPrice(value) {
     if (value === null || value === undefined) return '-';
     return Math.round(value).toLocaleString('ru-RU');
@@ -338,13 +457,13 @@ function bindEvents() {
         });
     });
 
-    document.getElementById('nav-cart').addEventListener('click', () => {
-        renderCart();
-        showScreen('cart');
+    document.getElementById('nav-giveaways').addEventListener('click', () => {
+        showScreen('giveaways');
     });
 
-    document.getElementById('nav-orders').addEventListener('click', () => {
-        app.tg.showAlert('История заказов доступна в основном боте.');
+    document.getElementById('nav-tradein').addEventListener('click', () => {
+        renderTradeIn();
+        showScreen('tradein');
     });
 
     document.getElementById('categories-grid').addEventListener('click', e => {
@@ -382,7 +501,28 @@ function bindEvents() {
     document.getElementById('back-catalog').addEventListener('click', () => showScreen('catalog'));
     document.getElementById('back-cart').addEventListener('click', () => showScreen('home'));
     document.getElementById('back-order').addEventListener('click', () => showScreen('cart'));
+    document.getElementById('back-orders').addEventListener('click', () => showScreen('home'));
+    document.getElementById('back-tradein').addEventListener('click', () => showScreen('home'));
+    document.getElementById('back-giveaways').addEventListener('click', () => showScreen('home'));
     document.getElementById('success-home').addEventListener('click', () => showScreen('home'));
+
+    document.getElementById('tradein-start').addEventListener('click', () => {
+        app.tg.showAlert('Оценка Trade-in запускается в основном боте. Отправьте /tradein');
+    });
+    document.getElementById('tradein-devices').addEventListener('click', e => {
+        const card = e.target.closest('.tradein-device');
+        if (!card) return;
+        app.tg.showAlert('Trade-in ' + card.dataset.type + ': отправьте заявку через основного бота /tradein');
+    });
+    document.getElementById('giveaway-join').addEventListener('click', () => {
+        app.tg.showAlert('Розыгрыш завершён. Следите за новыми акциями в канале!');
+    });
+    document.getElementById('giveaway-invite').addEventListener('click', () => {
+        app.tg.showAlert('Поделитесь ссылкой на бота, чтобы пригласить друзей.');
+    });
+    document.getElementById('giveaway-results').addEventListener('click', () => {
+        app.tg.showAlert('Результаты публикуются в канале.');
+    });
 
     document.getElementById('products-grid').addEventListener('click', e => {
         const card = e.target.closest('.product-card');
@@ -456,15 +596,24 @@ function bindEvents() {
         }
     });
 
+    document.getElementById('chat-fab').addEventListener('click', () => {
+        app.tg.showAlert('Напишите менеджеру в основном боте.');
+    });
+
+    document.getElementById('loyalty-btn').addEventListener('click', () => {
+        app.tg.showAlert('Завершение профиля доступно в основном боте.');
+    });
+
     document.querySelectorAll('[data-action]').forEach(el => {
         el.addEventListener('click', () => {
             const action = el.dataset.action;
             if (action === 'tradein') {
-                app.tg.showAlert('Trade-in оформляется через основного бота. Отправьте /tradein');
+                renderTradeIn();
+                showScreen('tradein');
             } else if (action === 'contact') {
                 app.tg.showAlert('Заявка менеджеру оформляется через бота. Нажмите «Написать менеджеру»');
             } else if (action === 'giveaways') {
-                app.tg.showAlert('Розыгрыши проводятся в канале. Следите за анонсами!');
+                showScreen('giveaways');
             }
         });
     });

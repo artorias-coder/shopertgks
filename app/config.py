@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     ADMIN_IDS: str = ""
     SUPERADMIN_ID: str = ""
+    ADMIN_PASSWORD: str = "kingstore-admin"
 
     @property
     def admin_ids(self) -> List[int]:

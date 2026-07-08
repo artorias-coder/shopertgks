@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KingStore Admin</title>
+    <link rel="stylesheet" href="/webapp/style.css">
+    <style>
+        body { background: #f5f6f8; padding: 0; }
+        .admin-wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+        .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .admin-title { font-size: 22px; font-weight: 900; }
+        .admin-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #e5e5e5; }
+        .admin-tab { padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600; }
+        .admin-tab.active { border-color: #f5a623; color: #f5a623; }
+        .admin-section { display: none; }
+        .admin-section.active { display: block; }
+        .admin-card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid #e5e5e5; }
+        .admin-card-title { font-weight: 700; margin-bottom: 12px; }
+        .form-row { margin-bottom: 12px; }
+        .form-row label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+        .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
+        .btn { padding: 10px 16px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: #f5a623; color: #fff; }
+        .btn-danger { background: #ff3b30; color: #fff; }
+        .btn-secondary { background: #f0f0f0; color: #333; }
+        .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+        .category-edit { background: #fff; border-radius: 16px; padding: 14px; border: 1px solid #e5e5e5; }
+        .category-edit img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; background: #f5f5f5; }
+        .upload-preview { max-width: 120px; max-height: 120px; border-radius: 10px; margin-top: 8px; }
+        .product-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .product-table th, .product-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+        .product-table th { font-weight: 600; color: #666; }
+        .product-row input { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+        .login-box { max-width: 320px; margin: 80px auto; background: #fff; border-radius: 16px; padding: 24px; border: 1px solid #e5e5e5; }
+    </style>
+</head>
+<body>
+    <div class="admin-wrap" id="admin-app">
+        <div class="login-box" id="login-box">
+            <div class="admin-title" style="text-align:center; margin-bottom: 20px;">KINGSTORE<br>Admin</div>
+            <div class="form-row">
+                <label>Пароль</label>
+                <input type="password" id="admin-password" placeholder="Введите пароль">
+            </div>
+            <button class="btn btn-primary" style="width:100%;" id="admin-login-btn">Войти</button>
+            <div id="login-error" style="color:#ff3b30; margin-top:10px; font-size:13px; display:none;">Неверный пароль</div>
+        </div>
+
+        <div id="admin-panel" style="display:none;">
+            <div class="admin-header">
+                <div class="admin-title">KINGSTORE Admin</div>
+                <button class="btn btn-secondary" id="admin-logout">Выйти</button>
+            </div>
+            <div class="admin-tabs">
+                <div class="admin-tab active" data-tab="categories">Категории</div>
+                <div class="admin-tab" data-tab="products">Товары</div>
+            </div>
+
+            <div class="admin-section active" id="tab-categories">
+                <div class="admin-card">
+                    <div class="admin-card-title">Добавить категорию</div>
+                    <div class="form-row">
+                        <label>Название</label>
+                        <input type="text" id="cat-name" placeholder="iPhone">
+                    </div>
+                    <div class="form-row">
+                        <label>Описание</label>
+                        <input type="text" id="cat-desc" placeholder="Выбрать модель и цену">
+                    </div>
+                    <div class="form-row">
+                        <label>Иконка (emoji вместо картинки)</label>
+                        <input type="text" id="cat-icon" placeholder="📱">
+                    </div>
+                    <div class="form-row">
+                        <label>Картинка категории</label>
+                        <input type="file" id="cat-image" accept="image/*">
+                        <img class="upload-preview" id="cat-image-preview" style="display:none;">
+                    </div>
+                    <div class="form-row">
+                        <label>Размер плитки</label>
+                        <select id="cat-tile">
+                            <option value="medium">Средний (1x1)</option>
+                            <option value="wide">Широкий (2x1)</option>
+                            <option value="large">Большой (2x1 высокий)</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>Порядок сортировки</label>
+                        <input type="number" id="cat-sort" value="0">
+                    </div>
+                    <button class="btn btn-primary" id="cat-add-btn">Добавить</button>
+                </div>
+
+                <div class="admin-card">
+                    <div class="admin-card-title">Категории</div>
+                    <div class="category-grid" id="categories-list"></div>
+                </div>
+            </div>
+
+            <div class="admin-section" id="tab-products">
+                <div class="admin-card">
+                    <div class="admin-card-title">Поиск товара</div>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="product-search" placeholder="Название товара" style="flex:1;">
+                        <button class="btn btn-primary" id="product-search-btn">Найти</button>
+                    </div>
+                </div>
+                <div class="admin-card" style="overflow-x:auto;">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Категория</th>
+                                <th>Цена</th>
+                                <th>Цвет</th>
+                                <th>Память</th>
+                                <th>Фото</th>
+                                <th>Склад</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="products-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/webapp/admin.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.models import Product, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus
 from app.config import settings
 from app.services.livesklad import fetch_shops
+from app.services.product_specs import extract_color, extract_memory, get_specs
 
 
 SHEET_EXPORT_URL = "https://docs.google.com/spreadsheets/d/{id}/export?format=csv"
@@ -41,49 +42,68 @@ def _normalize_category(name: str) -> str:
     return CATEGORY_ALIASES.get(key, name.strip())
 
 
+def _build_sku(row: dict) -> str:
+    parts = [row.get("name", ""), row.get("storage", ""), row.get("color", ""), row.get("sim", "")]
+    clean = "_".join(p.strip().replace(" ", "_").replace("\xa0", "_") for p in parts if p.strip())
+    return clean.lower()[:100]
+
+
 def _parse_sheet_csv(content: str):
     reader = csv.reader(io.StringIO(content))
     rows = list(reader)
     if not rows:
         return []
 
-    # Skip header row
+    header = [h.strip().lower() for h in rows[0]]
     data_rows = rows[1:]
     products = []
-    current_category = None
 
     for row in data_rows:
         if not row:
             continue
-        name = row[0].strip() if row else ""
-        # Detect category header: only first column filled, rest empty
-        if name and all((row[i].strip() if i < len(row) else "") == "" for i in range(1, min(len(row), 4))):
-            current_category = _normalize_category(name)
+
+        # Build a dict from header columns
+        data = {}
+        for i, key in enumerate(header):
+            data[key] = row[i].strip() if i < len(row) else ""
+
+        name = data.get("name", "")
+        if not name:
             continue
 
-        if not name or name.lower() in ("модель", "снятые с продажи"):
-            continue
+        # Support both old numeric columns and new named columns
+        if "price_sale" in data or "price_card" in data:
+            cash_price = _parse_price(data.get("price_sale", ""))
+            card_price = _parse_price(data.get("price_card", ""))
+        else:
+            cash_price = _parse_price(data.get("2", ""))
+            card_price = _parse_price(data.get("1", ""))
 
-        # Skip rows with no cash price or marked as unavailable
-        cash_price = _parse_price(row[2] if len(row) > 2 else "")
         if cash_price is None:
             continue
 
-        card_price = _parse_price(row[1] if len(row) > 1 else "")
-        discount = _parse_price(row[4] if len(row) > 4 else "")
-        promo = row[5].strip() if len(row) > 5 else ""
+        category = _normalize_category(data.get("category", "iPhone"))
+        color = extract_color(data.get("color", "")) or extract_color(name)
+        memory = data.get("storage", "") or extract_memory(name)
+        specs = get_specs(name)
+        sim = data.get("sim", "")
+        display_name = f"{name} {memory} {color}".strip()
+        if sim:
+            display_name += f" ({sim})"
 
-        sku = name.replace(" ", "_").replace("\xa0", "_").lower()[:100]
-        description = f"Категория: {current_category or 'iPhone'}"
+        sku = _build_sku({"name": name, "storage": memory, "color": color or "", "sim": sim})
 
         products.append({
             "sku": sku,
-            "name": name,
-            "category": current_category or "iPhone",
+            "name": display_name,
+            "category": category,
             "price": cash_price,
             "old_price": card_price,
-            "discount": discount,
-            "description": description,
+            "discount": card_price - cash_price if card_price and cash_price else None,
+            "description": f"Категория: {category}",
+            "color": color,
+            "memory": memory,
+            "specs": specs,
             "stock": 1,
         })
 
@@ -126,6 +146,9 @@ async def sync_products(session: AsyncSession) -> dict:
                 "category": str(row.get("category", "")),
                 "subcategory": str(row.get("subcategory", "")) or None,
                 "description": str(row.get("description", "")) or None,
+                "color": str(row.get("color", "")) or None,
+                "memory": str(row.get("memory", "")) or None,
+                "specs": row.get("specs") if isinstance(row.get("specs"), dict) else None,
                 "price": parse_price(row.get("price", 0)),
                 "old_price": parse_price(row.get("old_price")) if row.get("old_price") else None,
                 "discount": parse_price(row.get("discount")) if row.get("discount") else None,

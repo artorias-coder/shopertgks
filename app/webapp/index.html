@@ -11,8 +11,7 @@
     <div id="app">
         <header class="top-header">
             <div class="logo">
-                <span class="logo-icon">👑</span>
-                <span>KINGSTORE</span>
+                <span class="logo-text">KINGSTORE</span>
             </div>
         </header>
 
@@ -25,18 +24,23 @@
                     <button class="search-btn" id="search-go">→</button>
                 </div>
 
+                <div class="loyalty-banner">
+                    <div class="loyalty-title">Баллы лояльности</div>
+                    <div class="loyalty-text">Добавьте номер телефона</div>
+                    <div class="loyalty-sub">Без номера нельзя подключить бонусную программу. Завершите профиль.</div>
+                    <button class="loyalty-btn" id="loyalty-btn">Завершить профиль →</button>
+                </div>
+
                 <div class="giveaways-section" id="giveaways-section">
                     <div class="section-header">
                         <span class="section-icon">🎁</span>
                         <span class="section-title">Розыгрыши</span>
                     </div>
                     <div class="giveaway-card" data-action="giveaways">
-                        <div class="giveaway-image">
-                            <span class="giveaway-emoji">🚗</span>
-                        </div>
+                        <img class="giveaway-card-img" src="/webapp/images/giveaway-car.jpg" alt="Розыгрыш авто" loading="lazy" onerror="this.style.display='none'">
                         <div class="giveaway-info">
                             <div class="giveaway-title">Розыгрыш авто в Kingstore</div>
-                            <div class="giveaway-desc">Главный приз — автомобиль. Чтобы участвовать...</div>
+                            <div class="giveaway-desc">Главный приз — автомобиль. Чтобы участвовать, подпишись...</div>
                             <div class="giveaway-link">Участвовать в розыгрыше →</div>
                         </div>
                     </div>
@@ -44,8 +48,13 @@
 
                 <div class="offers-section">
                     <div class="section-header">
-                        <span class="section-icon">🔥</span>
+                        <span class="section-icon">�</span>
                         <span class="section-title">Выгодные предложения</span>
+                    </div>
+                    <div class="offer-card offer-manager" data-action="contact">
+                        <div class="offer-title">Узнать лучшую цену / Написать менеджеру</div>
+                        <div class="offer-desc">Оставьте заявку — менеджер скоро свяжется с вами в рабочее время.</div>
+                        <button class="offer-btn">Связаться с менеджером</button>
                     </div>
                     <div class="offer-card" data-action="tradein">
                         <div class="offer-title">Trade-in</div>
@@ -90,6 +99,8 @@
                         <button class="scenario-btn">Отправить →</button>
                     </div>
                 </div>
+
+                <button class="chat-fab" id="chat-fab">💬</button>
             </section>
 
             <!-- Catalog screen -->
@@ -164,25 +175,117 @@
                     <button id="success-home" class="submit-btn">На главную</button>
                 </div>
             </section>
+
+            <!-- Trade-in screen -->
+            <section id="tradein" class="screen">
+                <div class="screen-header">
+                    <button id="back-tradein" class="icon-btn">←</button>
+                    <div class="screen-title">Trade-in</div>
+                    <div class="placeholder"></div>
+                </div>
+                <div class="tradein-hero">
+                    <div class="tradein-title">Обменяйте старое на новое</div>
+                    <div class="tradein-subtitle">Сдайте ваше старое устройство Apple и отправьте заявку на оценку Trade-in.</div>
+                    <button class="tradein-start-btn" id="tradein-start">Начать оценку</button>
+                </div>
+                <div class="section-header">
+                    <span class="section-title">Выберите устройство</span>
+                </div>
+                <div class="tradein-device-grid" id="tradein-devices"></div>
+                <div class="section-header" style="margin-top:24px;">
+                    <span class="section-title">Как это работает</span>
+                </div>
+                <div class="how-it-works">
+                    <div class="how-step">
+                        <div class="how-number">1</div>
+                        <div class="how-info">
+                            <div class="how-title">Оцените устройство</div>
+                            <div class="how-desc">Ответьте на несколько вопросов о состоянии</div>
+                        </div>
+                    </div>
+                    <div class="how-step">
+                        <div class="how-number">2</div>
+                        <div class="how-info">
+                            <div class="how-title">Принесите в магазин</div>
+                            <div class="how-desc">Проведём диагностику за 15 минут</div>
+                        </div>
+                    </div>
+                    <div class="how-step">
+                        <div class="how-number">3</div>
+                        <div class="how-info">
+                            <div class="how-title">Получите скидку</div>
+                            <div class="how-desc">Используйте при покупке нового устройства</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Giveaways screen -->
+            <section id="giveaways" class="screen">
+                <div class="screen-header">
+                    <button id="back-giveaways" class="icon-btn">←</button>
+                    <div class="screen-title">Розыгрыш</div>
+                    <button class="giveaway-results-btn" id="giveaway-results">Результаты →</button>
+                </div>
+                <div class="giveaway-hero">
+                    <img class="giveaway-hero-img" src="/webapp/images/giveaway-car.jpg" alt="Розыгрыш авто" onerror="this.style.display='none'">
+                    <div class="giveaway-hero-content">
+                        <div class="giveaway-hero-title">Розыгрыш авто в Kingstore</div>
+                        <div class="giveaway-hero-desc">Главный приз — автомобиль. Чтобы участвовать, подпишись на Telegram-канал @kingstoreshop и нажми «Участвовать».</div>
+                        <div class="giveaway-progress-wrap">
+                            <div class="giveaway-progress-labels">
+                                <span>Прогресс розыгрыша</span>
+                                <span>100%</span>
+                            </div>
+                            <div class="giveaway-progress-bar"><div class="giveaway-progress-fill" style="width:100%"></div></div>
+                        </div>
+                        <button class="giveaway-action-btn" id="giveaway-join">Розыгрыш завершён</button>
+                    </div>
+                </div>
+                <div class="giveaway-stats">
+                    <div class="giveaway-stat">
+                        <div class="giveaway-stat-label">Мои билеты</div>
+                        <div class="giveaway-stat-value">0 <span>билетов</span></div>
+                    </div>
+                    <div class="giveaway-stat">
+                        <div class="giveaway-stat-label">Приглашено</div>
+                        <div class="giveaway-stat-value">0</div>
+                    </div>
+                </div>
+                <div class="giveaway-invite-card">
+                    <div class="giveaway-invite-title">Ваши приглашения</div>
+                    <div class="giveaway-invite-desc">Приглашай друзей и повышай шансы на победу. Больше друзей, больше шансов выиграть BMW!</div>
+                </div>
+                <button class="giveaway-invite-btn" id="giveaway-invite">Пригласить участника</button>
+            </section>
+
+            <!-- Orders screen -->
+            <section id="orders" class="screen">
+                <div class="screen-header">
+                    <button id="back-orders" class="icon-btn">←</button>
+                    <div class="screen-title">Мои заказы</div>
+                    <div class="placeholder"></div>
+                </div>
+                <div id="orders-content"></div>
+            </section>
         </main>
 
         <nav class="bottom-nav">
             <button class="nav-btn active" data-screen="home" title="Главная">
-                <span class="nav-icon">🏠</span>
+                <span class="nav-icon nav-home"></span>
                 <span class="nav-label">Главная</span>
             </button>
             <button class="nav-btn" data-screen="catalog" title="Каталог">
-                <span class="nav-icon">📱</span>
+                <span class="nav-icon nav-catalog"></span>
                 <span class="nav-label">Каталог</span>
             </button>
-            <button class="nav-btn" id="nav-cart" title="Корзина">
-                <span class="nav-icon">🛒</span>
-                <span class="nav-label">Корзина</span>
-                <span class="cart-badge" id="cart-badge">0</span>
+            <button class="nav-btn" id="nav-giveaways" title="Розыгрыши">
+                <span class="nav-icon nav-gift"></span>
+                <span class="nav-label">Розыгрыши</span>
             </button>
-            <button class="nav-btn" id="nav-orders" title="Заказы">
-                <span class="nav-icon">📝</span>
-                <span class="nav-label">Заказы</span>
+            <button class="nav-btn" id="nav-tradein" title="Trade-in">
+                <span class="nav-icon nav-tradein"></span>
+                <span class="nav-label">Trade-in</span>
             </button>
         </nav>
     </div>

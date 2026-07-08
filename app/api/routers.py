@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -26,6 +27,9 @@ async def list_products(category: str | None = None, session: AsyncSession = Dep
             "name": p.name,
             "category": p.category,
             "subcategory": p.subcategory,
+            "color": p.color,
+            "memory": p.memory,
+            "specs": p.specs,
             "price": float(p.price) if p.price else None,
             "old_price": float(p.old_price) if p.old_price else None,
             "discount": float(p.discount) if p.discount else None,
@@ -50,6 +54,9 @@ async def get_product(product_id: int, session: AsyncSession = Depends(get_db)):
         "name": p.name,
         "category": p.category,
         "subcategory": p.subcategory,
+        "color": p.color,
+        "memory": p.memory,
+        "specs": p.specs,
         "price": float(p.price) if p.price else None,
         "old_price": float(p.old_price) if p.old_price else None,
         "discount": float(p.discount) if p.discount else None,
@@ -62,13 +69,31 @@ async def get_product(product_id: int, session: AsyncSession = Depends(get_db)):
 
 @router.get("/categories")
 async def list_categories(session: AsyncSession = Depends(get_db)):
+    from app.models import Category
+    result = await session.execute(
+        select(Category).where(Category.is_active == True).order_by(Category.sort_order, Category.name)
+    )
+    categories = result.scalars().all()
+    if categories:
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "description": c.description,
+                "image_url": c.image_url,
+                "icon_emoji": c.icon_emoji,
+                "tile_size": c.tile_size,
+            }
+            for c in categories
+        ]
+    # Fallback: derive from products
     result = await session.execute(
         select(Product.category)
         .where(Product.status == ProductStatus.ACTIVE)
         .group_by(Product.category)
         .order_by(Product.category)
     )
-    return [r for r in result.scalars().all() if r]
+    return [{"id": None, "name": r, "description": None, "image_url": None, "icon_emoji": None, "tile_size": "medium"} for r in result.scalars().all() if r]
 
 
 @router.get("/shops")
@@ -182,10 +207,16 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
 
     await session.commit()
 
-    # Load shop relationship for LiveSklad sync
-    if order.shop_id:
-        shop_result = await session.execute(select(Shop).where(Shop.id == order.shop_id))
-        order.shop = shop_result.scalar_one_or_none()
+    # Reload order with relationships for LiveSklad sync
+    result = await session.execute(
+        select(Order)
+        .where(Order.id == order.id)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.shop),
+        )
+    )
+    order = result.scalar_one()
 
     try:
         livesklad_id = await create_livesklad_order(order)
@@ -194,7 +225,7 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
     except Exception as e:
         order.status = OrderStatus.PENDING_SYNC
         order.sync_status = SyncStatus.ERROR
-        order.sync_message = str(e)
+        order.sync_message = str(e)[:500]
 
     await session.commit()
 
@@ -208,8 +239,14 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
 
 
 @router.get("/orders")
-async def list_orders(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(Order).order_by(desc(Order.created_at)).limit(100))
+async def list_orders(telegram_id: int | None = None, session: AsyncSession = Depends(get_db)):
+    stmt = select(Order).order_by(desc(Order.created_at))
+    if telegram_id:
+        stmt = stmt.join(User).where(User.telegram_id == telegram_id)
+    result = await session.execute(stmt.limit(100).options(
+        selectinload(Order.items),
+        selectinload(Order.shop),
+    ))
     orders = result.scalars().all()
     return [
         {
@@ -221,6 +258,16 @@ async def list_orders(session: AsyncSession = Depends(get_db)):
             "phone": o.customer_phone,
             "sync_status": o.sync_status.value,
             "created_at": o.created_at.isoformat(),
+            "items": [
+                {
+                    "id": i.id,
+                    "name": i.name,
+                    "quantity": i.quantity,
+                    "price": float(i.price) if i.price else None,
+                }
+                for i in o.items
+            ],
+            "shop": o.shop.name if o.shop else None,
         }
         for o in orders
     ]
