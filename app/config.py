@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
+import os
 
 
 class Settings(BaseSettings):
@@ -44,6 +45,22 @@ class Settings(BaseSettings):
 
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
+
+    @property
+    def app_port(self) -> int:
+        # Bothost и многие хостинги передают порт через PORT
+        port = os.getenv("PORT")
+        if port:
+            try:
+                return int(port)
+            except ValueError:
+                pass
+        return self.APP_PORT
+
+    @property
+    def is_sqlite(self) -> bool:
+        return "sqlite" in self.DATABASE_URL.lower()
+
     LOG_LEVEL: str = "INFO"
 
     class Config:

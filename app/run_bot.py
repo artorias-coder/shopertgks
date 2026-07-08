@@ -19,19 +19,15 @@ from app.database import AsyncSessionLocal
 logging.basicConfig(level=logging.INFO)
 
 
-async def main():
-    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    storage = RedisStorage.from_url(settings.REDIS_URL)
-    dp = Dispatcher(storage=storage)
+def create_storage():
+    if settings.REDIS_URL and not settings.is_sqlite:
+        return RedisStorage.from_url(settings.REDIS_URL)
+    # Fallback для Bothost free plan (без Redis) или локальной SQLite
+    from aiogram.fsm.storage.memory import MemoryStorage
+    return MemoryStorage()
 
-    if settings.WEBAPP_URL:
-        try:
-            await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="Каталог", web_app=WebAppInfo(url=settings.WEBAPP_URL))
-            )
-        except Exception as e:
-            logging.warning(f"Не удалось установить меню Mini App: {e}")
 
+def setup_dispatcher(dp: Dispatcher):
     dp.message.middleware(DbSessionMiddleware(AsyncSessionLocal))
     dp.callback_query.middleware(DbSessionMiddleware(AsyncSessionLocal))
 
@@ -44,6 +40,28 @@ async def main():
     dp.include_router(admin.router)
     dp.include_router(support.router)
 
+
+async def set_bot_menu_button(bot: Bot):
+    if settings.WEBAPP_URL:
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Каталог", web_app=WebAppInfo(url=settings.WEBAPP_URL))
+            )
+        except Exception as e:
+            logging.warning(f"Не удалось установить меню Mini App: {e}")
+
+
+async def get_bot_and_dispatcher():
+    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    storage = create_storage()
+    dp = Dispatcher(storage=storage)
+    setup_dispatcher(dp)
+    return bot, dp
+
+
+async def main():
+    bot, dp = await get_bot_and_dispatcher()
+    await set_bot_menu_button(bot)
     await dp.start_polling(bot)
 
 

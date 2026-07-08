@@ -10,29 +10,37 @@ from app.models import Order, OrderStatus, SyncStatus
 from app.services.notifications import notify_user_order_status
 
 
-celery_app = Celery("tasks", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
-
-
-celery_app.conf.update(
-    task_serializer="json",
-    accept_content=["json"],
-    result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
-    beat_schedule={
-        "sync-google-sheets": {
-            "task": "app.tasks.sync_google_sheets",
-            "schedule": settings.GOOGLE_SYNC_INTERVAL_MINUTES * 60,
+celery_app = None
+if settings.REDIS_URL:
+    celery_app = Celery("tasks", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
+    celery_app.conf.update(
+        task_serializer="json",
+        accept_content=["json"],
+        result_serializer="json",
+        timezone="UTC",
+        enable_utc=True,
+        beat_schedule={
+            "sync-google-sheets": {
+                "task": "app.tasks.sync_google_sheets",
+                "schedule": settings.GOOGLE_SYNC_INTERVAL_MINUTES * 60,
+            },
+            "retry-livesklad": {
+                "task": "app.tasks.retry_livesklad_orders",
+                "schedule": 300,
+            },
         },
-        "retry-livesklad": {
-            "task": "app.tasks.retry_livesklad_orders",
-            "schedule": 300,
-        },
-    },
-)
+    )
 
 
-@celery_app.task
+def _register_task(func):
+    if celery_app:
+        return celery_app.task(func)
+    # Fallback: синхронный вызов без Celery
+    func.delay = lambda *args, **kwargs: func(*args, **kwargs)
+    return func
+
+
+@_register_task
 def sync_google_sheets():
     import asyncio
     asyncio.run(_sync_google_sheets())
@@ -43,7 +51,7 @@ async def _sync_google_sheets():
         await sync_products(session)
 
 
-@celery_app.task
+@_register_task
 def retry_livesklad_orders():
     import asyncio
     asyncio.run(_retry_livesklad_orders())
