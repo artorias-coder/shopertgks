@@ -1,8 +1,10 @@
+import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 
 from app.database import get_db
 from app.models import Product, Order, OrderItem, OrderStatus, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus, TradeIn, Giveaway, User
@@ -131,19 +133,19 @@ async def product_stock(product_id: int, session: AsyncSession = Depends(get_db)
 
 
 class OrderItemCreate(BaseModel):
-    product_id: int
-    quantity: int
+    product_id: int = Field(..., ge=1)
+    quantity: int = Field(..., ge=1, le=10)
 
 
 class OrderCreate(BaseModel):
-    telegram_id: int
-    name: str
-    phone: str
-    city: str
-    delivery: str
-    shop_id: int
-    comment: str | None = None
-    items: list[OrderItemCreate]
+    telegram_id: int = Field(..., ge=1)
+    name: str = Field(..., min_length=1, max_length=200)
+    phone: str = Field(..., min_length=5, max_length=30)
+    city: str = Field(..., min_length=1, max_length=100)
+    delivery: str = Field(..., min_length=1, max_length=50)
+    shop_id: int = Field(..., ge=1)
+    comment: str | None = Field(None, max_length=1000)
+    items: list[OrderItemCreate] = Field(..., min_items=1, max_items=20)
 
 
 @router.post("/orders")
@@ -177,7 +179,6 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
             "total": item_total,
         })
 
-    import datetime
     order = Order(
         order_number=f"KS-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}",
         user_id=user.id,

@@ -1,16 +1,77 @@
+import hmac
+import hashlib
 import os
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
 from app.config import settings
 from app.models import Category, Product
+
+
+def _admin_secret() -> bytes:
+    key = settings.WEBHOOK_SECRET or settings.BOT_TOKEN or settings.ADMIN_PASSWORD
+    return hashlib.sha256(key.encode()).digest()
+
+
+def _create_admin_token() -> str:
+    expires = datetime.now(timezone.utc) + timedelta(days=7)
+    payload = f"admin|{int(expires.timestamp())}"
+    sig = hmac.new(_admin_secret(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{payload}|{sig}"
+
+
+def _verify_admin_token(token: str) -> bool:
+    if not token or "|" not in token:
+        return False
+    try:
+        payload, sig = token.rsplit("|", 1)
+        _, exp_ts = payload.split("|", 1)
+        if int(exp_ts) < datetime.now(timezone.utc).timestamp():
+            return False
+        expected = hmac.new(_admin_secret(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+        return hmac.compare_digest(expected, sig)
+    except Exception:
+        return False
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=1000)
+    image_url: str | None = Field(None, max_length=1000)
+    icon_emoji: str | None = Field(None, max_length=50)
+    tile_size: str = Field("medium")
+    sort_order: int = Field(0, ge=0)
+    is_active: bool = True
+
+    @validator("tile_size")
+    def validate_tile_size(cls, v):
+        allowed = {"small", "medium", "large", "wide"}
+        if v not in allowed:
+            raise ValueError(f"tile_size must be one of {allowed}")
+        return v
+
+
+class CategoryUpdate(CategoryCreate):
+    pass
+
+
+class ProductUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=300)
+    category: str | None = Field(None, min_length=1, max_length=100)
+    color: str | None = Field(None, max_length=100)
+    memory: str | None = Field(None, max_length=50)
+    photo_url: str | None = Field(None, max_length=1000)
+    price: float | None = Field(None, ge=0)
+    stock: int | None = Field(None, ge=0)
+    status: str | None = Field(None, max_length=20)
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -23,8 +84,7 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 
 def _check_admin(request: Request):
     token = request.cookies.get("admin_token") or ""
-    expected = f"{settings.ADMIN_PASSWORD}:valid"
-    if token != expected:
+    if not _verify_admin_token(token):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -40,15 +100,19 @@ async def admin_logout(response: Response):
 
 
 @router.post("/login")
-async def admin_login(response: Response, password: str = Form(...)):
-    if password != settings.ADMIN_PASSWORD:
+async def admin_login(request: Request, response: Response, password: str = Form(...)):
+    if not hmac.compare_digest(
+        settings.ADMIN_PASSWORD.encode(),
+        password.encode(),
+    ):
         raise HTTPException(status_code=401, detail="Invalid password")
     expire = datetime.now(timezone.utc) + timedelta(days=7)
+    token = _create_admin_token()
     response.set_cookie(
         key="admin_token",
-        value=f"{settings.ADMIN_PASSWORD}:valid",
+        value=token,
         httponly=True,
-        secure=False,
+        secure=request.url.scheme == "https",
         samesite="lax",
         expires=expire,
     )
@@ -76,19 +140,18 @@ async def list_categories(session: AsyncSession = Depends(get_db), _=Depends(_ch
 
 @router.post("/api/categories")
 async def create_category(
-    request: Request,
+    data: CategoryCreate,
     session: AsyncSession = Depends(get_db),
     _=Depends(_check_admin),
 ):
-    data = await request.json()
     cat = Category(
-        name=data.get("name", "").strip(),
-        description=data.get("description"),
-        image_url=data.get("image_url"),
-        icon_emoji=data.get("icon_emoji"),
-        tile_size=data.get("tile_size", "medium"),
-        sort_order=int(data.get("sort_order", 0) or 0),
-        is_active=bool(data.get("is_active", True)),
+        name=data.name.strip(),
+        description=data.description,
+        image_url=data.image_url,
+        icon_emoji=data.icon_emoji,
+        tile_size=data.tile_size,
+        sort_order=data.sort_order,
+        is_active=data.is_active,
     )
     session.add(cat)
     await session.commit()
@@ -98,22 +161,21 @@ async def create_category(
 @router.put("/api/categories/{category_id}")
 async def update_category(
     category_id: int,
-    request: Request,
+    data: CategoryUpdate,
     session: AsyncSession = Depends(get_db),
     _=Depends(_check_admin),
 ):
-    data = await request.json()
     result = await session.execute(select(Category).where(Category.id == category_id))
     cat = result.scalar_one_or_none()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
-    cat.name = data.get("name", cat.name).strip()
-    cat.description = data.get("description", cat.description)
-    cat.image_url = data.get("image_url", cat.image_url)
-    cat.icon_emoji = data.get("icon_emoji", cat.icon_emoji)
-    cat.tile_size = data.get("tile_size", cat.tile_size)
-    cat.sort_order = int(data.get("sort_order", cat.sort_order) or 0)
-    cat.is_active = bool(data.get("is_active", cat.is_active))
+    cat.name = data.name.strip()
+    cat.description = data.description
+    cat.image_url = data.image_url
+    cat.icon_emoji = data.icon_emoji
+    cat.tile_size = data.tile_size
+    cat.sort_order = data.sort_order
+    cat.is_active = data.is_active
     await session.commit()
     return {"ok": True}
 
@@ -164,23 +226,30 @@ async def list_products(
 @router.put("/api/products/{product_id}")
 async def update_product(
     product_id: int,
-    request: Request,
+    data: ProductUpdate,
     session: AsyncSession = Depends(get_db),
     _=Depends(_check_admin),
 ):
-    data = await request.json()
     result = await session.execute(select(Product).where(Product.id == product_id))
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Product not found")
-    p.name = data.get("name", p.name).strip()
-    p.category = data.get("category", p.category)
-    p.color = data.get("color", p.color)
-    p.memory = data.get("memory", p.memory)
-    p.photo_url = data.get("photo_url", p.photo_url)
-    p.stock = int(data.get("stock", p.stock) or 0)
-    if "price" in data and data["price"] is not None:
-        p.price = float(data["price"])
+    if data.name is not None:
+        p.name = data.name.strip()
+    if data.category is not None:
+        p.category = data.category.strip()
+    if data.color is not None:
+        p.color = data.color
+    if data.memory is not None:
+        p.memory = data.memory
+    if data.photo_url is not None:
+        p.photo_url = data.photo_url
+    if data.price is not None:
+        p.price = data.price
+    if data.stock is not None:
+        p.stock = data.stock
+    if data.status is not None:
+        p.status = data.status
     await session.commit()
     return {"ok": True}
 

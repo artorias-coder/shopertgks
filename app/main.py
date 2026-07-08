@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, Request, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from pathlib import Path
@@ -19,6 +20,15 @@ bot = None
 dp = None
 
 app = FastAPI(title="KingStore API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 app.include_router(api_router, prefix="/api")
 app.include_router(admin_router)
 app.mount("/webapp/uploads", StaticFiles(directory=str(WEBAPP_DIR / "uploads")), name="uploads")
@@ -126,7 +136,13 @@ async def shutdown():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(select(1))
+        return {"status": "ok", "database": "ok"}
+    except Exception as e:
+        logging.error(f"Health check DB error: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 
 @app.post("/webhook")
