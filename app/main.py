@@ -151,7 +151,9 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     if dp is None:
         raise HTTPException(status_code=503, detail="Bot not initialized")
 
-    if settings.WEBHOOK_SECRET and x_telegram_bot_api_secret_token != settings.WEBHOOK_SECRET:
+    if not settings.WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+    if x_telegram_bot_api_secret_token != settings.WEBHOOK_SECRET:
         raise HTTPException(status_code=403, detail="Invalid secret token")
 
     from aiogram.types import Update

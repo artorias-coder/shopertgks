@@ -39,7 +39,6 @@ async def list_products(category: str | None = None, session: AsyncSession = Dep
             "subcategory": p.subcategory,
             "color": p.color,
             "memory": p.memory,
-            "specs": p.specs,
             "price": float(p.price) if p.price else None,
             "old_price": float(p.old_price) if p.old_price else None,
             "discount": float(p.discount) if p.discount else None,
