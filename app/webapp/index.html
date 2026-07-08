@@ -2,74 +2,138 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KINGSTORE</title>
     <link rel="stylesheet" href="/webapp/style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
     <div id="app">
-        <header class="header">
-            <div class="logo">KINGSTORE</div>
+        <header class="top-header">
+            <div class="logo">
+                <span class="logo-icon">👑</span>
+                <span>KINGSTORE</span>
+            </div>
         </header>
 
         <main id="main">
             <!-- Home screen -->
             <section id="home" class="screen active">
-                <div class="shops-row" id="shops-row"></div>
-
-                <div class="search-box">
+                <div class="search-bar">
+                    <span class="search-icon">🔍</span>
                     <input type="text" id="search-input" placeholder="Поиск iPhone, MacBook, AirPods...">
+                    <button class="search-btn" id="search-go">→</button>
                 </div>
 
-                <div class="quick-actions">
-                    <div class="action-card" data-action="tradein">
-                        <div class="action-title">Trade-in</div>
-                        <div class="action-desc">Обменяйте старое на новое с выгодой до 80.000 ₽</div>
-                        <div class="action-sub">Оценка за 1 минуту</div>
+                <div class="giveaways-section" id="giveaways-section">
+                    <div class="section-header">
+                        <span class="section-icon">🎁</span>
+                        <span class="section-title">Розыгрыши</span>
                     </div>
-                    <div class="action-card" data-action="contact">
-                        <div class="action-title">Узнать лучшую цену / Написать</div>
-                        <div class="action-desc">Оставьте заявку — менеджер скоро свяжется</div>
-                        <div class="action-sub">менеджеру</div>
+                    <div class="giveaway-card" data-action="giveaways">
+                        <div class="giveaway-image">
+                            <span class="giveaway-emoji">🚗</span>
+                        </div>
+                        <div class="giveaway-info">
+                            <div class="giveaway-title">Розыгрыш авто в Kingstore</div>
+                            <div class="giveaway-desc">Главный приз — автомобиль. Чтобы участвовать...</div>
+                            <div class="giveaway-link">Участвовать в розыгрыше →</div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="section-title">Категории</div>
-                <div class="categories-grid" id="categories-grid"></div>
+                <div class="offers-section">
+                    <div class="section-header">
+                        <span class="section-icon">🔥</span>
+                        <span class="section-title">Выгодные предложения</span>
+                    </div>
+                    <div class="offer-card" data-action="tradein">
+                        <div class="offer-title">Trade-in</div>
+                        <div class="offer-desc">Обменяйте старое на новое с выгодой до 80.000 ₽</div>
+                        <div class="offer-sub">Оценка за 1 минуту</div>
+                        <button class="offer-btn">Рассчитать выгоду →</button>
+                    </div>
+                </div>
+
+                <div class="categories-section">
+                    <div class="section-header">
+                        <span class="section-icon">📂</span>
+                        <span class="section-title">Категории</span>
+                    </div>
+                    <div class="categories-grid" id="categories-grid"></div>
+                </div>
+
+                <div class="scenarios-section">
+                    <div class="section-header">
+                        <span class="section-icon">⚡</span>
+                        <span class="section-title">Быстрые сценарии</span>
+                    </div>
+                    <div class="scenario-card" data-action="contact">
+                        <span class="scenario-icon">🎁</span>
+                        <div class="scenario-info">
+                            <div class="scenario-title">Подобрать подарок к 8 Марта</div>
+                        </div>
+                        <button class="scenario-btn">Отправить →</button>
+                    </div>
+                    <div class="scenario-card" data-action="contact">
+                        <span class="scenario-icon">🔥</span>
+                        <div class="scenario-info">
+                            <div class="scenario-title">Узнать лучшую цену сегодня</div>
+                        </div>
+                        <button class="scenario-btn">Отправить →</button>
+                    </div>
+                    <div class="scenario-card" data-action="contact">
+                        <span class="scenario-icon">💳</span>
+                        <div class="scenario-info">
+                            <div class="scenario-title">Рассрочка 0%: узнать условия</div>
+                        </div>
+                        <button class="scenario-btn">Отправить →</button>
+                    </div>
+                </div>
             </section>
 
             <!-- Catalog screen -->
             <section id="catalog" class="screen">
-                <div class="back-bar">
-                    <button id="back-home" class="back-btn">← Назад</button>
-                    <div class="catalog-title" id="catalog-title">Каталог</div>
+                <div class="screen-header">
+                    <button id="back-home" class="icon-btn">←</button>
+                    <div class="screen-title" id="catalog-title">Каталог</div>
+                    <div class="placeholder"></div>
                 </div>
+                <div class="catalog-search">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="catalog-search-input" placeholder="Поиск по товарам">
+                    <button class="search-btn" id="catalog-search-go">→</button>
+                </div>
+                <div class="category-chips" id="category-chips"></div>
                 <div class="products-grid" id="products-grid"></div>
             </section>
 
             <!-- Product screen -->
             <section id="product" class="screen">
-                <div class="back-bar">
-                    <button id="back-catalog" class="back-btn">← Назад</button>
+                <div class="screen-header">
+                    <button id="back-catalog" class="icon-btn">←</button>
+                    <div class="screen-title">Товар</div>
+                    <div class="placeholder"></div>
                 </div>
                 <div id="product-detail"></div>
             </section>
 
             <!-- Cart screen -->
             <section id="cart" class="screen">
-                <div class="back-bar">
-                    <button id="back-cart" class="back-btn">← Назад</button>
-                    <div class="catalog-title">Корзина</div>
+                <div class="screen-header">
+                    <button id="back-cart" class="icon-btn">←</button>
+                    <div class="screen-title">Корзина</div>
+                    <div class="placeholder"></div>
                 </div>
                 <div id="cart-content"></div>
             </section>
 
             <!-- Order form -->
             <section id="order" class="screen">
-                <div class="back-bar">
-                    <button id="back-order" class="back-btn">← Назад</button>
-                    <div class="catalog-title">Оформление</div>
+                <div class="screen-header">
+                    <button id="back-order" class="icon-btn">←</button>
+                    <div class="screen-title">Оформление</div>
+                    <div class="placeholder"></div>
                 </div>
                 <form id="order-form" class="order-form">
                     <label>Имя <input type="text" id="order-name" required></label>
@@ -103,9 +167,23 @@
         </main>
 
         <nav class="bottom-nav">
-            <button class="nav-btn active" data-screen="home">🏠<span>Главная</span></button>
-            <button class="nav-btn" data-screen="catalog">📱<span>Каталог</span></button>
-            <button class="nav-btn" id="nav-cart">🛒<span>Корзина</span><span class="cart-badge" id="cart-badge">0</span></button>
+            <button class="nav-btn active" data-screen="home" title="Главная">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Главная</span>
+            </button>
+            <button class="nav-btn" data-screen="catalog" title="Каталог">
+                <span class="nav-icon">📱</span>
+                <span class="nav-label">Каталог</span>
+            </button>
+            <button class="nav-btn" id="nav-cart" title="Корзина">
+                <span class="nav-icon">🛒</span>
+                <span class="nav-label">Корзина</span>
+                <span class="cart-badge" id="cart-badge">0</span>
+            </button>
+            <button class="nav-btn" id="nav-orders" title="Заказы">
+                <span class="nav-icon">📝</span>
+                <span class="nav-label">Заказы</span>
+            </button>
         </nav>
     </div>
 

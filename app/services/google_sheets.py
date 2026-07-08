@@ -25,6 +25,22 @@ def _parse_price(value):
         return None
 
 
+CATEGORY_ALIASES = {
+    "2": "iPhone",
+    "iphone": "iPhone",
+    "ipad": "iPad",
+    "mac": "Mac",
+    "watch": "Apple Watch",
+    "airpods": "AirPods",
+    "vision": "Vision",
+}
+
+
+def _normalize_category(name: str) -> str:
+    key = name.strip().lower()
+    return CATEGORY_ALIASES.get(key, name.strip())
+
+
 def _parse_sheet_csv(content: str):
     reader = csv.reader(io.StringIO(content))
     rows = list(reader)
@@ -42,7 +58,7 @@ def _parse_sheet_csv(content: str):
         name = row[0].strip() if row else ""
         # Detect category header: only first column filled, rest empty
         if name and all((row[i].strip() if i < len(row) else "") == "" for i in range(1, min(len(row), 4))):
-            current_category = name
+            current_category = _normalize_category(name)
             continue
 
         if not name or name.lower() in ("модель", "снятые с продажи"):
