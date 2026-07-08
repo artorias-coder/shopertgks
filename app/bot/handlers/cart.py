@@ -1,6 +1,7 @@
 from aiogram import Router, types, F
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.bot.keyboards import cart_keyboard
 from app.models import Product, Cart, CartItem, ProductStatus
@@ -10,7 +11,11 @@ router = Router()
 
 
 async def get_user_cart(session: AsyncSession, user_id: int) -> Cart:
-    stmt = select(Cart).where(Cart.user_id == user_id)
+    stmt = (
+        select(Cart)
+        .where(Cart.user_id == user_id)
+        .options(selectinload(Cart.items).selectinload(CartItem.product))
+    )
     result = await session.execute(stmt)
     cart = result.scalar_one_or_none()
     if not cart:

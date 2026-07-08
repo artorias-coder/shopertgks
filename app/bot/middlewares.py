@@ -12,4 +12,8 @@ class DbSessionMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: TelegramObject, data: Dict[str, Any]):
         async with self.session_pool() as session:
             data["session"] = session
-            return await handler(event, data)
+            try:
+                return await handler(event, data)
+            except Exception:
+                await session.rollback()
+                raise

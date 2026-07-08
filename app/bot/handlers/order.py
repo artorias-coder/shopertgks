@@ -4,6 +4,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.bot.states import OrderForm, RequestForm
 from app.bot.keyboards import order_confirm_keyboard, request_confirm_keyboard, shop_select_keyboard
