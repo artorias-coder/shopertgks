@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -132,9 +134,9 @@ async def tradein_confirm(callback: types.CallbackQuery, state: FSMContext, sess
         livesklad_id = await create_livesklad_tradein(tradein)
         tradein.livesklad_id = livesklad_id
         await session.commit()
-    except Exception as e:
+    except Exception:
         # Store error but keep trade-in new; admin will retry manually
-        pass
+        logging.exception("Failed to sync trade-in %s to LiveSklad", tradein.id)
 
     await notify_admins_tradein(callback.message.bot, tradein)
     await state.clear()

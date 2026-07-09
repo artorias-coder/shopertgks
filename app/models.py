@@ -1,4 +1,3 @@
-import datetime
 import enum
 from sqlalchemy import (
     Column,

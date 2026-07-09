@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.bot.keyboards import MAIN_MENU_CLIENT, MAIN_MENU_ADMIN, main_menu_inline
+from app.bot.keyboards import MAIN_MENU_ADMIN, main_menu_inline
 from app.bot.states import SupportState, RequestForm
 from app.models import User, UserRole
 from app.config import settings

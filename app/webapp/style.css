@@ -696,6 +696,12 @@ body {
     margin-top: 8px;
 }
 
+.submit-btn:disabled {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+}
+
 .success-box {
     text-align: center;
     padding: 40px 20px;
@@ -1284,4 +1290,288 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
+}
+
+/* Confirmation sheet / modal */
+.sheet-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.sheet-overlay.show {
+    display: flex;
+}
+
+.sheet-card {
+    position: relative;
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 24px 20px 20px;
+    width: 100%;
+    max-width: 380px;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: sheetIn 0.18s ease;
+}
+
+@keyframes sheetIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.sheet-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.06);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.sheet-title {
+    font-weight: 800;
+    font-size: 18px;
+    margin-bottom: 10px;
+    padding-right: 24px;
+}
+
+.sheet-text {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+.sheet-body {
+    margin-bottom: 4px;
+}
+
+.sheet-body:empty {
+    display: none;
+}
+
+.sheet-product-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-bottom: 16px;
+}
+
+.sheet-product-name {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.sheet-product-price {
+    color: var(--accent-dark);
+    font-weight: 800;
+    font-size: 16px;
+}
+
+.sheet-input {
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 15px;
+    margin-bottom: 16px;
+}
+
+.sheet-confirm-btn {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 8px;
+}
+
+.sheet-cancel-btn {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sheet-cancel-btn.hidden,
+.sheet-close.hidden,
+.sheet-confirm-btn.hidden {
+    display: none;
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    left: 50%;
+    bottom: 100px;
+    transform: translate(-50%, 12px);
+    background: #1a1a1a;
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    max-width: 90%;
+    text-align: center;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* Wizard (Trade-in) */
+.wizard-progress {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.wizard-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.2s;
+}
+
+.wizard-step-title {
+    font-weight: 800;
+    font-size: 19px;
+    margin-bottom: 16px;
+}
+
+.radio-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.radio-row-sub {
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.radio-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+}
+
+.radio-row.selected {
+    border-color: var(--accent);
+    background: rgba(245, 166, 35, 0.08);
+}
+
+.radio-row.selected .radio-dot {
+    border-color: var(--accent);
+    background: radial-gradient(var(--accent) 0%, var(--accent) 45%, transparent 50%);
+}
+
+.wizard-summary {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.wizard-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+
+.wizard-summary-row:last-child {
+    border-bottom: none;
+}
+
+.wizard-summary-label {
+    color: var(--muted);
+}
+
+.wizard-summary-value {
+    font-weight: 700;
+    text-align: right;
+}
+
+/* Giveaway results */
+.results-subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.result-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.result-card-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 6px;
+}
+
+.result-card-date {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.result-card-winners {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(245, 166, 35, 0.12);
+    color: var(--accent-dark);
+    border-radius: 14px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 700;
 }

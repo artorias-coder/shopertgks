@@ -60,7 +60,7 @@ def product_card_keyboard(product_id: int):
         inline_keyboard=[
             [InlineKeyboardButton(text="🛒 Заказать", callback_data=f"order:{product_id}")],
             [InlineKeyboardButton(text="❓ Задать вопрос", callback_data=f"ask:{product_id}")],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=f"back_to_category")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_category")],
         ]
     )
 

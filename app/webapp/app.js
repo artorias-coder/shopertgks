@@ -44,6 +44,9 @@ const app = {
     selectedShop: null,
     currentCategory: null,
     currentSearch: '',
+    phoneSaved: false,
+    tradein: null,
+    activeGiveawayId: null,
 };
 
 function getCategoryIcon(name) {
@@ -130,14 +133,16 @@ function init() {
 }
 
 async function loadData() {
-    const [productsRes, categoriesRes, shopsRes] = await Promise.all([
+    const [productsRes, categoriesRes, shopsRes, giveawaysRes] = await Promise.all([
         fetch(`${API_URL}/products`),
         fetch(`${API_URL}/categories`),
         fetch(`${API_URL}/shops`),
+        fetch(`${API_URL}/giveaways`),
     ]);
     app.products = await productsRes.json();
     app.categories = await categoriesRes.json();
     app.shops = await shopsRes.json();
+    app.giveawaysList = await giveawaysRes.json();
     if (app.shops.length > 0) {
         app.selectedShop = app.shops[0];
     }
@@ -189,7 +194,7 @@ function showScreen(name) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(name).classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    const navMap = { home: 'home', catalog: 'catalog', cart: 'nav-cart', orders: 'nav-orders' };
+    const navMap = { home: 'home', catalog: 'catalog', giveaways: 'nav-giveaways', 'giveaway-results-screen': 'nav-giveaways', tradein: 'nav-tradein' };
     const navSelector = navMap[name];
     if (navSelector) {
         const el = navSelector.startsWith('nav-') ? document.getElementById(navSelector) : document.querySelector(`[data-screen="${navSelector}"]`);
@@ -357,8 +362,9 @@ async function renderOrders() {
     const container = document.getElementById('orders-content');
     container.innerHTML = '<div class="loading">Загрузка заказов...</div>';
     try {
-        const telegramId = app.user ? app.user.id : 0;
-        const res = await fetch(`${API_URL}/orders?telegram_id=${telegramId}`);
+        const res = await fetch(`${API_URL}/orders`, {
+            headers: { 'X-Telegram-Init-Data': app.tg.initData || '' },
+        });
         const orders = await res.json();
         if (!orders.length) {
             container.innerHTML = '<div class="empty-state">У вас пока нет заказов</div>';
@@ -441,9 +447,398 @@ function renderTradeIn() {
     `).join('');
 }
 
+const TRADEIN_MODELS = {
+    'iPhone': [
+        'iPhone 17 Pro Max', 'iPhone 17 Pro', 'iPhone 17', 'iPhone 17 Air',
+        'iPhone 16 Pro Max', 'iPhone 16 Pro', 'iPhone 16 Plus', 'iPhone 16',
+        'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15 Plus', 'iPhone 15',
+        'iPhone 14 Pro Max', 'iPhone 14 Pro', 'iPhone 14 Plus', 'iPhone 14',
+        'iPhone 13 Pro Max', 'iPhone 13 Pro', 'iPhone 13', 'iPhone 11',
+    ],
+    'iPad': ['iPad Pro', 'iPad Air', 'iPad mini', 'iPad (9-12 поколения)'],
+    'Apple Watch': ['Ultra 1-2', 'Series 8-10', 'SE 1-2'],
+    'MacBook': ['MacBook Pro 16', 'MacBook Pro 14', 'MacBook Pro 13', 'MacBook Air 15', 'MacBook Air 13'],
+};
+
+const TRADEIN_MEMORY = ['64 ГБ', '128 ГБ', '256 ГБ', '512 ГБ', '1 ТБ'];
+const TRADEIN_BATTERY = ['Отличное (90–100%)', 'Хорошее (80–89%)', 'Удовлетворительное (70–79%)', 'Ниже 70%'];
+const TRADEIN_CONDITION = ['Как новое', 'Есть мелкие следы использования', 'Есть заметные повреждения', 'Не включается / разбит экран'];
+
+const TRADEIN_STEP_ORDER = ['device', 'model', 'memory', 'battery', 'condition', 'confirm'];
+
+function startTradeinWizard() {
+    app.tradein = { step: 'device' };
+    renderTradeinBody();
+}
+
+function tradeinSelectDevice(type) {
+    app.tradein = { step: 'model', device_type: type };
+    renderTradeinBody();
+}
+
+function tradeinBack() {
+    if (!app.tradein || app.tradein.step === 'device') {
+        app.tradein = null;
+        showScreen('home');
+        return;
+    }
+    const idx = TRADEIN_STEP_ORDER.indexOf(app.tradein.step);
+    app.tradein.step = TRADEIN_STEP_ORDER[Math.max(0, idx - 1)];
+    renderTradeinBody();
+}
+
+function radioRowHtml(value) {
+    return `<div class="radio-row" data-value="${escapeHtml(value)}"><span>${escapeHtml(value)}</span><span class="radio-dot"></span></div>`;
+}
+
+function wizardShell(progress, title, rowsHtml) {
+    return `
+        <div class="wizard-progress"><div class="wizard-progress-fill" style="width:${progress}%"></div></div>
+        <div class="wizard-step-title">${escapeHtml(title)}</div>
+        <div id="wizard-choices">${rowsHtml}</div>
+        <button class="submit-btn" id="wizard-next" disabled>Далее</button>
+    `;
+}
+
+function bindWizardChoice(onSelect) {
+    let selected = null;
+    const choices = document.getElementById('wizard-choices');
+    const nextBtn = document.getElementById('wizard-next');
+    choices.addEventListener('click', e => {
+        const row = e.target.closest('.radio-row');
+        if (!row) return;
+        selected = row.dataset.value;
+        choices.querySelectorAll('.radio-row').forEach(r => r.classList.toggle('selected', r === row));
+        nextBtn.disabled = false;
+    });
+    nextBtn.addEventListener('click', () => {
+        if (selected) onSelect(selected);
+    });
+}
+
+function wizardSummaryRow(label, value) {
+    return `<div class="wizard-summary-row"><span class="wizard-summary-label">${escapeHtml(label)}</span><span class="wizard-summary-value">${escapeHtml(value || '—')}</span></div>`;
+}
+
+function renderTradeinBody() {
+    const body = document.getElementById('tradein-body');
+    const step = app.tradein ? app.tradein.step : 'device';
+
+    if (step === 'device') {
+        body.innerHTML = `
+            <div class="section-header"><span class="section-title">Выберите устройство</span></div>
+            <div class="tradein-device-grid" id="tradein-devices"></div>
+            <div class="section-header" style="margin-top:24px;"><span class="section-title">Как это работает</span></div>
+            <div class="how-it-works">
+                <div class="how-step">
+                    <div class="how-number">1</div>
+                    <div class="how-info">
+                        <div class="how-title">Оцените устройство</div>
+                        <div class="how-desc">Ответьте на несколько вопросов о состоянии</div>
+                    </div>
+                </div>
+                <div class="how-step">
+                    <div class="how-number">2</div>
+                    <div class="how-info">
+                        <div class="how-title">Принесите в магазин</div>
+                        <div class="how-desc">Проведём диагностику за 15 минут</div>
+                    </div>
+                </div>
+                <div class="how-step">
+                    <div class="how-number">3</div>
+                    <div class="how-info">
+                        <div class="how-title">Получите скидку</div>
+                        <div class="how-desc">Используйте при покупке нового устройства</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        renderTradeIn();
+        return;
+    }
+
+    const stepIndex = { model: 1, memory: 2, battery: 3, condition: 4, confirm: 5 }[step];
+    const progress = Math.round((stepIndex / 5) * 100);
+
+    if (step === 'model') {
+        const models = TRADEIN_MODELS[app.tradein.device_type] || TRADEIN_MODELS['iPhone'];
+        body.innerHTML = wizardShell(progress, 'Выберите модель', models.map(radioRowHtml).join(''));
+        bindWizardChoice(value => {
+            app.tradein.model = value;
+            app.tradein.step = 'memory';
+            renderTradeinBody();
+        });
+        return;
+    }
+    if (step === 'memory') {
+        body.innerHTML = wizardShell(progress, 'Объём памяти', TRADEIN_MEMORY.map(radioRowHtml).join(''));
+        bindWizardChoice(value => {
+            app.tradein.memory = value;
+            app.tradein.step = 'battery';
+            renderTradeinBody();
+        });
+        return;
+    }
+    if (step === 'battery') {
+        body.innerHTML = wizardShell(progress, 'Оцените состояние батареи', TRADEIN_BATTERY.map(radioRowHtml).join(''));
+        bindWizardChoice(value => {
+            app.tradein.battery = value;
+            app.tradein.step = 'condition';
+            renderTradeinBody();
+        });
+        return;
+    }
+    if (step === 'condition') {
+        body.innerHTML = wizardShell(progress, 'Состояние устройства', TRADEIN_CONDITION.map(radioRowHtml).join(''));
+        bindWizardChoice(value => {
+            app.tradein.condition = value;
+            app.tradein.step = 'confirm';
+            renderTradeinBody();
+        });
+        return;
+    }
+    if (step === 'confirm') {
+        const t = app.tradein;
+        body.innerHTML = `
+            <div class="wizard-progress"><div class="wizard-progress-fill" style="width:100%"></div></div>
+            <div class="wizard-step-title">Подтвердите данные</div>
+            <div class="wizard-summary">
+                ${wizardSummaryRow('Тип устройства', t.device_type)}
+                ${wizardSummaryRow('Модель', t.model)}
+                ${wizardSummaryRow('Конфигурация', t.memory)}
+                ${wizardSummaryRow('Состояние батареи', t.battery)}
+                ${wizardSummaryRow('Состояние устройства', t.condition)}
+            </div>
+            <button class="submit-btn" id="tradein-submit">Подтвердить</button>
+        `;
+        document.getElementById('tradein-submit').addEventListener('click', submitTradein);
+    }
+}
+
+async function submitTradein() {
+    const t = app.tradein;
+    const btn = document.getElementById('tradein-submit');
+    btn.disabled = true;
+    btn.textContent = 'Отправка...';
+    const { ok, data } = await apiFetch('/tradeins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            device_type: t.device_type,
+            model: t.model,
+            memory: t.memory,
+            battery: t.battery,
+            condition: t.condition,
+        }),
+    });
+    if (ok) {
+        showToast('Заявка на Trade-in отправлена!');
+        app.tradein = null;
+        showScreen('home');
+    } else {
+        btn.disabled = false;
+        btn.textContent = 'Подтвердить';
+        app.tg.showAlert('Ошибка: ' + (data && data.detail ? data.detail : 'не удалось отправить заявку'));
+    }
+}
+
+function getActiveGiveaway() {
+    if (!app.giveawaysList) return null;
+    return app.giveawaysList.find(g => g.status === 'active') || null;
+}
+
+function applyGiveawayStats(data) {
+    const statValues = document.querySelectorAll('#giveaways .giveaway-stat-value');
+    if (statValues[0]) statValues[0].innerHTML = `${data.my_tickets} <span>билетов</span>`;
+    if (statValues[1]) statValues[1].textContent = data.invited_count;
+}
+
+async function openGiveawaysScreen() {
+    showScreen('giveaways');
+    const active = getActiveGiveaway();
+    app.activeGiveawayId = active ? active.id : null;
+    if (!active) return;
+    const { ok, data } = await apiFetch(`/giveaways/${active.id}`);
+    if (ok && data) applyGiveawayStats(data);
+}
+
+async function joinActiveGiveaway() {
+    if (!app.activeGiveawayId) {
+        app.tg.showAlert('Сейчас нет активных розыгрышей.');
+        return;
+    }
+    const { ok, data } = await apiFetch(`/giveaways/${app.activeGiveawayId}/join`, { method: 'POST' });
+    if (ok) {
+        applyGiveawayStats(data);
+        showToast('Вы участвуете в розыгрыше!');
+    } else {
+        app.tg.showAlert('Ошибка: ' + (data && data.detail ? data.detail : 'попробуйте позже'));
+    }
+}
+
+async function inviteToActiveGiveaway() {
+    if (!app.activeGiveawayId) return;
+    const { ok, data } = await apiFetch(`/giveaways/${app.activeGiveawayId}/invite`, { method: 'POST' });
+    if (ok) {
+        applyGiveawayStats(data);
+        showToast('Спасибо за приглашение!');
+    } else {
+        app.tg.showAlert('Сначала подтвердите участие в розыгрыше.');
+    }
+}
+
+async function openGiveawayResults() {
+    showScreen('giveaway-results-screen');
+    const container = document.getElementById('giveaway-results-content');
+    const completed = (app.giveawaysList || []).filter(g => g.status === 'completed');
+    if (!completed.length) {
+        container.innerHTML = '<div class="empty-state">История завершённых розыгрышей пока пуста.</div>';
+        return;
+    }
+    container.innerHTML = completed.map(g => `
+        <div class="result-card">
+            <div class="result-card-title">${escapeHtml(g.title)}</div>
+            <div class="result-card-date">Завершён ${formatDate(g.created_at)}</div>
+            <div class="result-card-winners">🏆 0 победителей</div>
+        </div>
+    `).join('');
+}
+
 function formatPrice(value) {
     if (value === null || value === undefined) return '-';
     return Math.round(value).toLocaleString('ru-RU');
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function closeSheet() {
+    document.getElementById('sheet-overlay').classList.remove('show');
+}
+
+function openSheet({ title, text = '', bodyHtml = '', confirmText = 'Отправить', cancelText = 'Отмена', showCancel = true, onConfirm }) {
+    document.getElementById('sheet-title').textContent = title;
+    document.getElementById('sheet-text').innerHTML = text;
+    document.getElementById('sheet-body').innerHTML = bodyHtml;
+    const confirmBtn = document.getElementById('sheet-confirm');
+    confirmBtn.textContent = confirmText;
+    confirmBtn.classList.toggle('hidden', !confirmText);
+    const cancelBtn = document.getElementById('sheet-cancel');
+    cancelBtn.textContent = cancelText;
+    cancelBtn.classList.toggle('hidden', !showCancel);
+
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    if (onConfirm) {
+        newConfirmBtn.addEventListener('click', onConfirm);
+    }
+
+    document.getElementById('sheet-overlay').classList.add('show');
+}
+
+async function apiFetch(path, options = {}) {
+    const headers = Object.assign({ 'X-Telegram-Init-Data': app.tg.initData || '' }, options.headers || {});
+    const res = await fetch(`${API_URL}${path}`, Object.assign({}, options, { headers }));
+    let data = null;
+    try {
+        data = await res.json();
+    } catch (e) {
+        data = null;
+    }
+    return { ok: res.ok, status: res.status, data };
+}
+
+function openPhoneSheet(onSaved) {
+    openSheet({
+        title: 'Укажите номер телефона',
+        text: 'Без номера нельзя подключить бонусную программу и оформить заявку. Менеджер свяжется с вами по этому номеру.',
+        bodyHtml: '<input type="tel" class="sheet-input" id="phone-input" placeholder="+7 900 000-00-00">',
+        confirmText: 'Сохранить',
+        onConfirm: async () => {
+            const phone = document.getElementById('phone-input').value.trim();
+            if (!phone) return;
+            const { ok, data } = await apiFetch('/profile/phone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone }),
+            });
+            if (ok) {
+                app.phoneSaved = true;
+                closeSheet();
+                document.getElementById('loyalty-banner')?.classList.add('hidden');
+                showToast('Телефон сохранён');
+                if (onSaved) onSaved();
+            } else {
+                app.tg.showAlert('Ошибка: ' + (data && data.detail ? data.detail : 'не удалось сохранить телефон'));
+            }
+        },
+    });
+}
+
+async function sendLead(source, { productId = null, message = null, silent = false } = {}) {
+    const { ok, status, data } = await apiFetch('/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, product_id: productId, message }),
+    });
+    if (ok) {
+        app.phoneSaved = true;
+        if (!silent) showToast('Заявка отправлена. Менеджер свяжется с вами в течение 5 минут.');
+        return true;
+    }
+    if (status === 409 && data && data.detail === 'phone_required') {
+        openPhoneSheet(() => sendLead(source, { productId, message, silent }));
+        return false;
+    }
+    app.tg.showAlert('Ошибка: ' + (data && data.detail ? data.detail : 'не удалось отправить заявку'));
+    return false;
+}
+
+function confirmProductOrder(product) {
+    openSheet({
+        title: 'Подтвердите заявку',
+        text: 'После оформления заявки менеджер свяжется с вами в течение 5 минут в рабочее время.',
+        bodyHtml: `
+            <div class="sheet-product-card">
+                <div class="sheet-product-name">${escapeHtml(product.name)}</div>
+                <div class="sheet-product-price">${formatPrice(product.price)} ₽</div>
+            </div>
+        `,
+        confirmText: 'Отправить заявку',
+        onConfirm: async () => {
+            const success = await sendLead('product', { productId: product.id });
+            if (success) closeSheet();
+        },
+    });
+}
+
+function confirmBestPrice() {
+    openSheet({
+        title: 'Узнать лучшую цену',
+        text: 'Ответим за 2–5 минут. Подберём и забронируем.',
+        confirmText: 'Написать менеджеру',
+        onConfirm: async () => {
+            const success = await sendLead('best_price');
+            if (success) closeSheet();
+        },
+    });
+}
+
+function confirmContactManager() {
+    openSheet({
+        title: 'Написать менеджеру',
+        text: 'Оставьте заявку — менеджер скоро свяжется с вами в рабочее время.',
+        confirmText: 'Связаться с менеджером',
+        onConfirm: async () => {
+            const success = await sendLead('contact_manager');
+            if (success) closeSheet();
+        },
+    });
 }
 
 function bindEvents() {
@@ -457,12 +852,9 @@ function bindEvents() {
         });
     });
 
-    document.getElementById('nav-giveaways').addEventListener('click', () => {
-        showScreen('giveaways');
-    });
-
+    document.getElementById('nav-giveaways').addEventListener('click', openGiveawaysScreen);
     document.getElementById('nav-tradein').addEventListener('click', () => {
-        renderTradeIn();
+        startTradeinWizard();
         showScreen('tradein');
     });
 
@@ -502,27 +894,22 @@ function bindEvents() {
     document.getElementById('back-cart').addEventListener('click', () => showScreen('home'));
     document.getElementById('back-order').addEventListener('click', () => showScreen('cart'));
     document.getElementById('back-orders').addEventListener('click', () => showScreen('home'));
-    document.getElementById('back-tradein').addEventListener('click', () => showScreen('home'));
+    document.getElementById('back-tradein').addEventListener('click', tradeinBack);
     document.getElementById('back-giveaways').addEventListener('click', () => showScreen('home'));
+    document.getElementById('back-giveaway-results').addEventListener('click', () => showScreen('giveaways'));
     document.getElementById('success-home').addEventListener('click', () => showScreen('home'));
 
     document.getElementById('tradein-start').addEventListener('click', () => {
-        app.tg.showAlert('Оценка Trade-in запускается в основном боте. Отправьте /tradein');
+        document.getElementById('tradein-devices').scrollIntoView({ behavior: 'smooth' });
     });
     document.getElementById('tradein-devices').addEventListener('click', e => {
         const card = e.target.closest('.tradein-device');
         if (!card) return;
-        app.tg.showAlert('Trade-in ' + card.dataset.type + ': отправьте заявку через основного бота /tradein');
+        tradeinSelectDevice(card.dataset.type);
     });
-    document.getElementById('giveaway-join').addEventListener('click', () => {
-        app.tg.showAlert('Розыгрыш завершён. Следите за новыми акциями в канале!');
-    });
-    document.getElementById('giveaway-invite').addEventListener('click', () => {
-        app.tg.showAlert('Поделитесь ссылкой на бота, чтобы пригласить друзей.');
-    });
-    document.getElementById('giveaway-results').addEventListener('click', () => {
-        app.tg.showAlert('Результаты публикуются в канале.');
-    });
+    document.getElementById('giveaway-join').addEventListener('click', joinActiveGiveaway);
+    document.getElementById('giveaway-invite').addEventListener('click', inviteToActiveGiveaway);
+    document.getElementById('giveaway-results').addEventListener('click', openGiveawayResults);
 
     document.getElementById('products-grid').addEventListener('click', e => {
         const card = e.target.closest('.product-card');
@@ -536,11 +923,11 @@ function bindEvents() {
         const orderBtn = e.target.closest('.order-btn');
         if (!addBtn && !orderBtn) return;
         const productId = parseInt((addBtn || orderBtn).dataset.productId);
-        addToCart(productId);
         if (orderBtn) {
-            renderOrderForm();
-            showScreen('order');
+            const product = app.products.find(p => p.id === productId);
+            if (product) confirmProductOrder(product);
         } else {
+            addToCart(productId);
             app.tg.showAlert('Товар добавлен в корзину');
         }
     });
@@ -599,26 +986,34 @@ function bindEvents() {
         }
     });
 
-    document.getElementById('chat-fab').addEventListener('click', () => {
-        app.tg.showAlert('Напишите менеджеру в основном боте.');
-    });
+    document.getElementById('chat-fab').addEventListener('click', confirmContactManager);
 
-    document.getElementById('loyalty-btn').addEventListener('click', () => {
-        app.tg.showAlert('Завершение профиля доступно в основном боте.');
-    });
+    document.getElementById('loyalty-btn').addEventListener('click', () => openPhoneSheet());
 
     document.querySelectorAll('[data-action]').forEach(el => {
         el.addEventListener('click', () => {
             const action = el.dataset.action;
             if (action === 'tradein') {
-                renderTradeIn();
+                startTradeinWizard();
                 showScreen('tradein');
-            } else if (action === 'contact') {
-                app.tg.showAlert('Заявка менеджеру оформляется через бота. Нажмите «Написать менеджеру»');
+            } else if (action === 'best-price') {
+                confirmBestPrice();
             } else if (action === 'giveaways') {
-                showScreen('giveaways');
+                openGiveawaysScreen();
             }
         });
+    });
+
+    document.querySelector('.scenarios-section').addEventListener('click', e => {
+        const card = e.target.closest('[data-lead-source]');
+        if (!card) return;
+        sendLead(card.dataset.leadSource);
+    });
+
+    document.getElementById('sheet-close').addEventListener('click', closeSheet);
+    document.getElementById('sheet-cancel').addEventListener('click', closeSheet);
+    document.getElementById('sheet-overlay').addEventListener('click', e => {
+        if (e.target.id === 'sheet-overlay') closeSheet();
     });
 }
 

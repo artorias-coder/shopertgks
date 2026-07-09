@@ -6,7 +6,6 @@ from sqlalchemy import select, func, or_
 from app.bot.keyboards import catalog_menu, category_products_keyboard, product_card_keyboard, product_specs_keyboard
 from app.bot.states import SearchState
 from app.models import Product, ProductStatus
-from app.bot.handlers.client import get_or_create_user
 
 router = Router()
 

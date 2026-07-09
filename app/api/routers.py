@@ -1,17 +1,39 @@
 import datetime
+import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
+from app.admin_router import _check_admin
 from app.database import get_db
-from app.models import Product, Order, OrderItem, OrderStatus, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus, TradeIn, Giveaway, User
-from app.services.google_sheets import sync_products
-from app.services.livesklad import create_livesklad_order
-from app.services.telegram_webapp import validate_init_data
+from app.models import Product, Order, OrderItem, OrderStatus, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus, TradeIn, TradeInStatus, Giveaway, GiveawayParticipant, User
+from app.services.livesklad import create_livesklad_order, create_livesklad_tradein
+from app.services.notifications import notify_admins_new_order, notify_admins_tradein, notify_user_order_status
+from app.services.telegram_webapp import get_validated_user_id, get_validated_user_name, validate_init_data
 from app.tasks import sync_google_sheets
+
+
+async def _get_bot():
+    from app.main import bot
+    return bot
+
+
+def _telegram_user_name(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")) -> str | None:
+    return get_validated_user_name(x_telegram_init_data or "")
+
+
+async def _get_or_create_user(session: AsyncSession, telegram_id: int, name: str | None = None) -> User:
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        user = User(telegram_id=telegram_id, name=name, role="client")
+        session.add(user)
+        await session.flush()
+    return user
 
 
 def verify_telegram_init_data(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
@@ -19,6 +41,13 @@ def verify_telegram_init_data(x_telegram_init_data: str | None = Header(default=
         raise HTTPException(status_code=401, detail="Missing Telegram init data")
     if not validate_init_data(x_telegram_init_data):
         raise HTTPException(status_code=403, detail="Invalid Telegram init data")
+
+
+def verify_telegram_user(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")) -> int:
+    telegram_id = get_validated_user_id(x_telegram_init_data or "")
+    if telegram_id is None:
+        raise HTTPException(status_code=403, detail="Invalid Telegram init data")
+    return telegram_id
 
 router = APIRouter()
 
@@ -251,10 +280,16 @@ async def create_order(
 
 
 @router.get("/orders")
-async def list_orders(telegram_id: int | None = None, session: AsyncSession = Depends(get_db)):
-    stmt = select(Order).order_by(desc(Order.created_at))
-    if telegram_id:
-        stmt = stmt.join(User).where(User.telegram_id == telegram_id)
+async def list_orders(
+    telegram_id: int = Depends(verify_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Order)
+        .join(User)
+        .where(User.telegram_id == telegram_id)
+        .order_by(desc(Order.created_at))
+    )
     result = await session.execute(stmt.limit(100).options(
         selectinload(Order.items),
         selectinload(Order.shop),
@@ -285,8 +320,171 @@ async def list_orders(telegram_id: int | None = None, session: AsyncSession = De
     ]
 
 
+class ProfilePhoneUpdate(BaseModel):
+    phone: str = Field(..., min_length=5, max_length=30)
+
+
+@router.post("/profile/phone")
+async def update_profile_phone(
+    payload: ProfilePhoneUpdate,
+    telegram_id: int = Depends(verify_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    user = await _get_or_create_user(session, telegram_id)
+    user.phone = payload.phone.strip()
+    await session.commit()
+    return {"ok": True}
+
+
+LEAD_SUBJECTS = {
+    "best_price": "Узнать лучшую цену",
+    "contact_manager": "Вопрос менеджеру",
+    "gift": "Подобрать подарок к 8 марта",
+    "price_today": "Узнать лучшую цену сегодня",
+    "installment": "Рассрочка 0%: узнать условия",
+}
+
+
+class LeadCreate(BaseModel):
+    source: Literal["product", "best_price", "contact_manager", "gift", "price_today", "installment"]
+    product_id: int | None = Field(None, ge=1)
+    message: str | None = Field(None, max_length=1000)
+
+
+@router.post("/leads")
+async def create_lead(
+    payload: LeadCreate,
+    telegram_id: int = Depends(verify_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    user = await _get_or_create_user(session, telegram_id)
+    if not user.phone:
+        raise HTTPException(status_code=409, detail="phone_required")
+
+    product = None
+    if payload.product_id:
+        product_result = await session.execute(select(Product).where(Product.id == payload.product_id))
+        product = product_result.scalar_one_or_none()
+        if not product:
+            raise HTTPException(status_code=400, detail="Product not found")
+
+    if payload.source == "product":
+        subject = product.name if product else "Заявка на товар"
+    else:
+        subject = LEAD_SUBJECTS[payload.source]
+
+    order = Order(
+        order_number=f"KS-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}",
+        user_id=user.id,
+        status=OrderStatus.NEW,
+        total_amount=product.price if product else 0,
+        delivery_type=subject,
+        customer_name=user.name or "Клиент",
+        customer_phone=user.phone,
+        comment=payload.message or subject,
+        sync_status=SyncStatus.PENDING,
+    )
+    session.add(order)
+    await session.flush()
+
+    if product:
+        session.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            sku=product.sku,
+            name=product.name,
+            quantity=1,
+            price=product.price,
+            total=product.price,
+        ))
+
+    await session.commit()
+
+    result = await session.execute(
+        select(Order)
+        .where(Order.id == order.id)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.user),
+            selectinload(Order.shop),
+        )
+    )
+    order = result.scalar_one()
+
+    if product:
+        try:
+            livesklad_id = await create_livesklad_order(order)
+            order.livesklad_order_id = livesklad_id
+            order.sync_status = SyncStatus.SUCCESS
+        except Exception as e:
+            order.status = OrderStatus.PENDING_SYNC
+            order.sync_status = SyncStatus.ERROR
+            order.sync_message = str(e)[:500]
+        await session.commit()
+
+    bot = await _get_bot()
+    if bot:
+        try:
+            await notify_admins_new_order(bot, order)
+            await notify_user_order_status(bot, telegram_id, order)
+        except Exception:
+            logging.exception("Failed to notify about lead %s", order.id)
+
+    return {"id": order.id, "number": order.order_number, "subject": subject}
+
+
+class TradeInCreate(BaseModel):
+    device_type: str = Field(..., min_length=1, max_length=100)
+    model: str = Field(..., min_length=1, max_length=200)
+    memory: str | None = Field(None, max_length=50)
+    battery: str = Field(..., min_length=1, max_length=100)
+    condition: str = Field(..., min_length=1, max_length=100)
+
+
+@router.post("/tradeins")
+async def create_tradein(
+    payload: TradeInCreate,
+    telegram_id: int = Depends(verify_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    user = await _get_or_create_user(session, telegram_id)
+
+    model_text = f"{payload.model} {payload.memory}".strip() if payload.memory else payload.model
+    tradein = TradeIn(
+        user_id=user.id,
+        device_type=payload.device_type,
+        model=model_text,
+        battery_condition=payload.battery,
+        device_condition=payload.condition,
+        status=TradeInStatus.NEW,
+    )
+    session.add(tradein)
+    await session.commit()
+
+    result = await session.execute(
+        select(TradeIn).where(TradeIn.id == tradein.id).options(selectinload(TradeIn.user))
+    )
+    tradein = result.scalar_one()
+
+    try:
+        livesklad_id = await create_livesklad_tradein(tradein)
+        tradein.livesklad_id = livesklad_id
+        await session.commit()
+    except Exception:
+        logging.exception("Failed to sync trade-in %s to LiveSklad", tradein.id)
+
+    bot = await _get_bot()
+    if bot:
+        try:
+            await notify_admins_tradein(bot, tradein)
+        except Exception:
+            logging.exception("Failed to notify admins about trade-in %s", tradein.id)
+
+    return {"id": tradein.id}
+
+
 @router.get("/tradeins")
-async def list_tradeins(session: AsyncSession = Depends(get_db)):
+async def list_tradeins(session: AsyncSession = Depends(get_db), _=Depends(_check_admin)):
     from sqlalchemy import desc
     result = await session.execute(select(TradeIn).order_by(desc(TradeIn.created_at)).limit(100))
     tradeins = result.scalars().all()
@@ -321,14 +519,116 @@ async def list_giveaways(session: AsyncSession = Depends(get_db)):
     ]
 
 
+async def _optional_telegram_user(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")) -> int | None:
+    if not x_telegram_init_data:
+        return None
+    return get_validated_user_id(x_telegram_init_data)
+
+
+@router.get("/giveaways/{giveaway_id}")
+async def get_giveaway(
+    giveaway_id: int,
+    telegram_id: int | None = Depends(_optional_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    result = await session.execute(select(Giveaway).where(Giveaway.id == giveaway_id))
+    giveaway = result.scalar_one_or_none()
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+
+    my_tickets = 0
+    invited_count = 0
+    joined = False
+    if telegram_id is not None:
+        user_result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+        user = user_result.scalar_one_or_none()
+        if user:
+            p_result = await session.execute(
+                select(GiveawayParticipant).where(
+                    GiveawayParticipant.giveaway_id == giveaway_id,
+                    GiveawayParticipant.user_id == user.id,
+                )
+            )
+            participant = p_result.scalar_one_or_none()
+            if participant:
+                joined = True
+                my_tickets = participant.tickets
+                invited_count = participant.invited_count
+
+    return {
+        "id": giveaway.id,
+        "title": giveaway.title,
+        "description": giveaway.description,
+        "prize": giveaway.prize,
+        "status": giveaway.status.value,
+        "channel_url": giveaway.channel_url,
+        "joined": joined,
+        "my_tickets": my_tickets,
+        "invited_count": invited_count,
+    }
+
+
+@router.post("/giveaways/{giveaway_id}/join")
+async def join_giveaway(
+    giveaway_id: int,
+    telegram_id: int = Depends(verify_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    result = await session.execute(select(Giveaway).where(Giveaway.id == giveaway_id))
+    giveaway = result.scalar_one_or_none()
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+
+    user = await _get_or_create_user(session, telegram_id)
+
+    p_result = await session.execute(
+        select(GiveawayParticipant).where(
+            GiveawayParticipant.giveaway_id == giveaway_id,
+            GiveawayParticipant.user_id == user.id,
+        )
+    )
+    participant = p_result.scalar_one_or_none()
+    if not participant:
+        participant = GiveawayParticipant(giveaway_id=giveaway_id, user_id=user.id)
+        session.add(participant)
+        await session.commit()
+
+    return {"joined": True, "my_tickets": participant.tickets, "invited_count": participant.invited_count}
+
+
+@router.post("/giveaways/{giveaway_id}/invite")
+async def invite_to_giveaway(
+    giveaway_id: int,
+    telegram_id: int = Depends(verify_telegram_user),
+    session: AsyncSession = Depends(get_db),
+):
+    user = await _get_or_create_user(session, telegram_id)
+
+    p_result = await session.execute(
+        select(GiveawayParticipant).where(
+            GiveawayParticipant.giveaway_id == giveaway_id,
+            GiveawayParticipant.user_id == user.id,
+        )
+    )
+    participant = p_result.scalar_one_or_none()
+    if not participant:
+        raise HTTPException(status_code=400, detail="Join the giveaway first")
+
+    participant.invited_count += 1
+    participant.tickets += 1
+    await session.commit()
+
+    return {"my_tickets": participant.tickets, "invited_count": participant.invited_count}
+
+
 @router.post("/sync")
-async def trigger_sync():
+async def trigger_sync(_=Depends(_check_admin)):
     sync_google_sheets.delay()
     return {"status": "queued"}
 
 
 @router.get("/logs")
-async def list_logs(limit: int = 20, session: AsyncSession = Depends(get_db)):
+async def list_logs(limit: int = 20, session: AsyncSession = Depends(get_db), _=Depends(_check_admin)):
     from sqlalchemy import desc
     result = await session.execute(select(SyncLog).order_by(desc(SyncLog.created_at)).limit(limit))
     logs = result.scalars().all()

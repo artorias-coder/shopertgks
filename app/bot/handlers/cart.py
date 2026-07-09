@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.bot.keyboards import cart_keyboard
-from app.models import Product, Cart, CartItem, ProductStatus
+from app.models import Product, Cart, CartItem
 from app.bot.handlers.client import get_or_create_user
 
 router = Router()

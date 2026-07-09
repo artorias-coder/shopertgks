@@ -24,7 +24,7 @@
                     <button class="search-btn" id="search-go">→</button>
                 </div>
 
-                <div class="loyalty-banner">
+                <div class="loyalty-banner" id="loyalty-banner">
                     <div class="loyalty-title">Баллы лояльности</div>
                     <div class="loyalty-text">Добавьте номер телефона</div>
                     <div class="loyalty-sub">Без номера нельзя подключить бонусную программу. Завершите профиль.</div>
@@ -51,7 +51,7 @@
                         <span class="section-icon">�</span>
                         <span class="section-title">Выгодные предложения</span>
                     </div>
-                    <div class="offer-card offer-manager" data-action="contact">
+                    <div class="offer-card offer-manager" data-action="best-price">
                         <div class="offer-title">Узнать лучшую цену / Написать менеджеру</div>
                         <div class="offer-desc">Оставьте заявку — менеджер скоро свяжется с вами в рабочее время.</div>
                         <button class="offer-btn">Связаться с менеджером</button>
@@ -77,21 +77,21 @@
                         <span class="section-icon">⚡</span>
                         <span class="section-title">Быстрые сценарии</span>
                     </div>
-                    <div class="scenario-card" data-action="contact">
+                    <div class="scenario-card" data-lead-source="gift">
                         <span class="scenario-icon">🎁</span>
                         <div class="scenario-info">
                             <div class="scenario-title">Подобрать подарок к 8 Марта</div>
                         </div>
                         <button class="scenario-btn">Отправить →</button>
                     </div>
-                    <div class="scenario-card" data-action="contact">
+                    <div class="scenario-card" data-lead-source="price_today">
                         <span class="scenario-icon">🔥</span>
                         <div class="scenario-info">
                             <div class="scenario-title">Узнать лучшую цену сегодня</div>
                         </div>
                         <button class="scenario-btn">Отправить →</button>
                     </div>
-                    <div class="scenario-card" data-action="contact">
+                    <div class="scenario-card" data-lead-source="installment">
                         <span class="scenario-icon">💳</span>
                         <div class="scenario-info">
                             <div class="scenario-title">Рассрочка 0%: узнать условия</div>
@@ -188,36 +188,49 @@
                     <div class="tradein-subtitle">Сдайте ваше старое устройство Apple и отправьте заявку на оценку Trade-in.</div>
                     <button class="tradein-start-btn" id="tradein-start">Начать оценку</button>
                 </div>
-                <div class="section-header">
-                    <span class="section-title">Выберите устройство</span>
-                </div>
-                <div class="tradein-device-grid" id="tradein-devices"></div>
-                <div class="section-header" style="margin-top:24px;">
-                    <span class="section-title">Как это работает</span>
-                </div>
-                <div class="how-it-works">
-                    <div class="how-step">
-                        <div class="how-number">1</div>
-                        <div class="how-info">
-                            <div class="how-title">Оцените устройство</div>
-                            <div class="how-desc">Ответьте на несколько вопросов о состоянии</div>
+                <div id="tradein-body">
+                    <div class="section-header">
+                        <span class="section-title">Выберите устройство</span>
+                    </div>
+                    <div class="tradein-device-grid" id="tradein-devices"></div>
+                    <div class="section-header" style="margin-top:24px;">
+                        <span class="section-title">Как это работает</span>
+                    </div>
+                    <div class="how-it-works">
+                        <div class="how-step">
+                            <div class="how-number">1</div>
+                            <div class="how-info">
+                                <div class="how-title">Оцените устройство</div>
+                                <div class="how-desc">Ответьте на несколько вопросов о состоянии</div>
+                            </div>
+                        </div>
+                        <div class="how-step">
+                            <div class="how-number">2</div>
+                            <div class="how-info">
+                                <div class="how-title">Принесите в магазин</div>
+                                <div class="how-desc">Проведём диагностику за 15 минут</div>
+                            </div>
+                        </div>
+                        <div class="how-step">
+                            <div class="how-number">3</div>
+                            <div class="how-info">
+                                <div class="how-title">Получите скидку</div>
+                                <div class="how-desc">Используйте при покупке нового устройства</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="how-step">
-                        <div class="how-number">2</div>
-                        <div class="how-info">
-                            <div class="how-title">Принесите в магазин</div>
-                            <div class="how-desc">Проведём диагностику за 15 минут</div>
-                        </div>
-                    </div>
-                    <div class="how-step">
-                        <div class="how-number">3</div>
-                        <div class="how-info">
-                            <div class="how-title">Получите скидку</div>
-                            <div class="how-desc">Используйте при покупке нового устройства</div>
-                        </div>
-                    </div>
                 </div>
+            </section>
+
+            <!-- Giveaway results screen -->
+            <section id="giveaway-results-screen" class="screen">
+                <div class="screen-header">
+                    <button id="back-giveaway-results" class="icon-btn">←</button>
+                    <div class="screen-title">Результаты розыгрышей</div>
+                    <div class="placeholder"></div>
+                </div>
+                <div class="results-subtitle">История завершённых розыгрышей и список победителей.</div>
+                <div id="giveaway-results-content"></div>
             </section>
 
             <!-- Giveaways screen -->
@@ -289,6 +302,19 @@
             </button>
         </nav>
     </div>
+
+    <div class="sheet-overlay" id="sheet-overlay">
+        <div class="sheet-card" id="sheet-card">
+            <button class="sheet-close" id="sheet-close">✕</button>
+            <div class="sheet-title" id="sheet-title"></div>
+            <div class="sheet-text" id="sheet-text"></div>
+            <div class="sheet-body" id="sheet-body"></div>
+            <button class="sheet-confirm-btn" id="sheet-confirm"></button>
+            <button class="sheet-cancel-btn" id="sheet-cancel">Отмена</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
 
     <script src="/webapp/app.js"></script>
 </body>

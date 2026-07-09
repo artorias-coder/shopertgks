@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Bot
 from app.config import settings
 from app.models import Order, TradeIn
@@ -57,7 +59,7 @@ async def notify_admins_new_order(bot: Bot, order: Order, error: str | None = No
                 reply_markup=admin_request_keyboard(order.id, order.livesklad_order_id),
             )
         except Exception:
-            pass
+            logging.exception("Failed to notify admin %s about order %s", admin_id, order.id)
 
 
 async def notify_admins_tradein(bot: Bot, tradein: TradeIn):
@@ -77,4 +79,4 @@ async def notify_admins_tradein(bot: Bot, tradein: TradeIn):
         try:
             await bot.send_message(admin_id, text, reply_markup=admin_tradein_keyboard(tradein.id))
         except Exception:
-            pass
+            logging.exception("Failed to notify admin %s about trade-in %s", admin_id, tradein.id)

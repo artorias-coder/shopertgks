@@ -1,11 +1,11 @@
+import logging
+
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.bot.states import SupportState
 from app.bot.handlers.client import get_or_create_user
-from app.models import User, UserRole
 from app.config import settings
 
 router = Router()
@@ -62,6 +62,6 @@ async def receive_support_question(message: types.Message, state: FSMContext, se
         try:
             await message.bot.send_message(admin_id, text)
         except Exception:
-            pass
+            logging.exception("Failed to notify admin %s about support question", admin_id)
 
     await message.answer("Спасибо! Ваш вопрос отправлен менеджеру. Мы скоро ответим.")

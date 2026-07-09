@@ -4,13 +4,12 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.bot.states import OrderForm, RequestForm
 from app.bot.keyboards import order_confirm_keyboard, request_confirm_keyboard, shop_select_keyboard
 from app.bot.handlers.client import get_or_create_user
 from app.bot.handlers.cart import get_user_cart, cart_text
-from app.models import Order, OrderItem, OrderStatus, SyncStatus, Product, Shop, User
+from app.models import Order, OrderItem, OrderStatus, SyncStatus, Product, Shop
 from app.services.livesklad import create_livesklad_order
 from app.services.notifications import notify_admins_new_order, notify_user_order_status
 

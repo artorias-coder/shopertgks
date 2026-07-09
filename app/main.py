@@ -1,13 +1,13 @@
-from fastapi import FastAPI, Depends, Request, Header, HTTPException
+from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from pathlib import Path
 import logging
 
-from app.database import get_db, engine, AsyncSessionLocal
+from app.database import engine, AsyncSessionLocal
 from app.models import Base
 from app.api.routers import router as api_router
 from app.admin_router import router as admin_router
@@ -142,7 +142,7 @@ async def health():
         return {"status": "ok", "database": "ok"}
     except Exception as e:
         logging.error(f"Health check DB error: {e}")
-        raise HTTPException(status_code=503, detail="Database unavailable")
+        raise HTTPException(status_code=503, detail="Database unavailable") from e
 
 
 @app.post("/webhook")
@@ -162,12 +162,3 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     update = Update(**data)
     await dp.feed_update(update, bot=bot)
     return {"ok": True}
-
-
-@app.get("/orders")
-async def list_orders(session: AsyncSession = Depends(get_db)):
-    from sqlalchemy import select
-    from app.models import Order
-    result = await session.execute(select(Order))
-    orders = result.scalars().all()
-    return [{"id": o.id, "number": o.order_number, "status": o.status.value} for o in orders]

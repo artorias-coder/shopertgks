@@ -5,7 +5,7 @@ from sqlalchemy import select, desc
 
 from app.bot.handlers.client import is_admin
 from app.bot.keyboards import admin_request_keyboard, admin_tradein_keyboard
-from app.models import Order, OrderStatus, SyncStatus, SyncLog, TradeIn, TradeInStatus, Giveaway, GiveawayStatus, Product, Shop, ProductStock
+from app.models import Order, OrderStatus, SyncStatus, SyncLog, TradeIn, TradeInStatus, Giveaway, Product, Shop, ProductStock
 from app.services.livesklad import create_livesklad_order
 from app.config import settings
 from app.services.notifications import notify_user_order_status

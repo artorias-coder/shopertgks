@@ -1,5 +1,4 @@
 from celery import Celery
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.config import settings
@@ -7,7 +6,6 @@ from app.database import AsyncSessionLocal
 from app.services.google_sheets import sync_products
 from app.services.livesklad import create_livesklad_order
 from app.models import Order, OrderStatus, SyncStatus
-from app.services.notifications import notify_user_order_status
 
 
 celery_app = None

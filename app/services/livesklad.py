@@ -1,7 +1,7 @@
 import time
 import httpx
 from app.config import settings
-from app.models import Order, TradeIn, SyncLog, SyncStatus
+from app.models import Order, TradeIn
 
 
 _token_cache = {"token": None, "expires_at": 0}
