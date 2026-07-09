@@ -24,6 +24,9 @@ except Exception as e:
     sys.exit(1)
 
 
+VALID_LOG_LEVELS = {"critical", "error", "warning", "info", "debug", "trace"}
+
+
 if __name__ == "__main__":
     host = settings.APP_HOST
     port = settings.app_port
@@ -31,13 +34,24 @@ if __name__ == "__main__":
     logger.info(f"DATABASE_URL present: {bool(settings.DATABASE_URL)}")
     logger.info(f"DATABASE_URL scheme: {settings.DATABASE_URL.split('://')[0] if settings.DATABASE_URL else 'none'}")
     logger.info(f"BOT_TOKEN present: {bool(settings.BOT_TOKEN)}")
-    logger.info(f"WEBHOOK_URL: {settings.WEBHOOK_URL}")
+    logger.info(f"WEBHOOK_URL: {settings.WEBHOOK_URL or '(не задан — бот НЕ подключит webhook и не будет отвечать в Telegram)'}")
+    logger.info(f"WEBHOOK_SECRET present: {bool(settings.WEBHOOK_SECRET)}")
     logger.info(f"WEBAPP_URL: {settings.WEBAPP_URL}")
+
+    log_level = (settings.LOG_LEVEL or "info").lower()
+    if log_level not in VALID_LOG_LEVELS:
+        logger.warning(
+            f"LOG_LEVEL={settings.LOG_LEVEL!r} — недопустимое значение (похоже, переменные окружения "
+            f"перепутаны в панели хостинга, например LOG_LEVEL содержит значение другой переменной). "
+            f"Используется 'info' вместо падения приложения."
+        )
+        log_level = "info"
+
     uvicorn.run(
         "app.main:app",
         host=host,
         port=port,
-        log_level=settings.LOG_LEVEL.lower(),
+        log_level=log_level,
         access_log=True,
         proxy_headers=True,
         forwarded_allow_ips="*",
