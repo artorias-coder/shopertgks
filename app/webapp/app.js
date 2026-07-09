@@ -313,6 +313,7 @@ function renderProduct(productId) {
                 <div class="product-detail-name">${escapeHtml(p.name)}</div>
                 ${colorHtml}
                 <div class="product-detail-price">${formatPrice(p.price)} ₽</div>
+                <div class="product-detail-price-note">Цена указана за наличный расчёт</div>
                 ${oldPrice}
                 <div class="product-tags">${tags}</div>
 

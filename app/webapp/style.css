@@ -561,6 +561,12 @@ body {
     margin-bottom: 4px;
 }
 
+.product-detail-price-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+
 .product-detail-old-price {
     font-size: 15px;
     color: var(--muted);
