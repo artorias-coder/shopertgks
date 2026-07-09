@@ -48,6 +48,7 @@ const app = {
     tradein: null,
     activeGiveawayId: null,
     isAdmin: false,
+    _currentProductId: null,
 };
 
 function getCategoryIcon(name) {
@@ -335,9 +336,46 @@ function renderCatalog(category, search = '') {
     }).join('');
 }
 
+function renderShopAvailabilityHtml(stocks) {
+    if (!stocks || stocks.length === 0) {
+        return '<div class="shop-availability-empty">Наличие по точкам пока не указано</div>';
+    }
+    return stocks.map(s => {
+        const inStock = (s.quantity || 0) > 0;
+        return `
+            <div class="shop-availability-row">
+                <span class="shop-availability-dot ${inStock ? 'in-stock' : 'out-of-stock'}"></span>
+                <span class="shop-availability-name">${escapeHtml(s.shop_name || 'Точка')}</span>
+                <span class="shop-availability-status">${inStock ? 'В наличии' : 'Нет в наличии'}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadShopAvailability(productId) {
+    const listEl = document.getElementById('shop-availability-list');
+    if (!listEl) return;
+    try {
+        const res = await fetch(`${API_URL}/products/${productId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        // Пользователь мог уже уйти на другой товар, пока грузился запрос —
+        // не перетираем чужую карточку своим ответом.
+        if (app._currentProductId !== productId) return;
+        const el = document.getElementById('shop-availability-list');
+        if (el) el.innerHTML = renderShopAvailabilityHtml(data.stocks);
+    } catch (err) {
+        console.error('shop availability load failed:', err);
+        if (app._currentProductId !== productId) return;
+        const el = document.getElementById('shop-availability-list');
+        if (el) el.innerHTML = '<div class="shop-availability-empty">Не удалось проверить наличие</div>';
+    }
+}
+
 function renderProduct(productId) {
     const p = app.products.find(x => x.id === productId);
     if (!p) return;
+    app._currentProductId = productId;
     const container = document.getElementById('product-detail');
     const img = getProductImage(p, 'detail');
 
@@ -383,6 +421,13 @@ function renderProduct(productId) {
                 <div class="product-tags">${tags}</div>
 
                 <div class="product-section">
+                    <div class="product-section-title">Наличие в магазинах</div>
+                    <div class="shop-availability-list" id="shop-availability-list">
+                        <div class="shop-availability-loading">Проверяем наличие…</div>
+                    </div>
+                </div>
+
+                <div class="product-section">
                     <div class="product-section-title">Описание</div>
                     <div class="product-section-text">${escapeHtml(p.description || (p.name + ' — отличный выбор. Свяжитесь с менеджером для уточнения деталей.'))}</div>
                 </div>
@@ -397,6 +442,8 @@ function renderProduct(productId) {
             </div>
         </div>
     `;
+
+    loadShopAvailability(productId);
 }
 
 function renderCart() {

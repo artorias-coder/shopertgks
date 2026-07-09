@@ -67,6 +67,20 @@ async def _seed_default_categories(session: AsyncSession):
     logging.info("Default categories seeded")
 
 
+async def _seed_default_shops(session: AsyncSession):
+    from app.models import Shop
+    result = await session.execute(select(Shop))
+    if result.scalars().first():
+        return
+    # LiveSklad не даёт API для проверки остатков по точкам (только
+    # мастерские/заказы/касса/корзина/продажи) — поэтому наличие ведёт
+    # администратор вручную через панель, а тут только сами точки.
+    for name in ("ТРЦ Острова", "ТРЦ Мега", "ТЦ Фестиваль-парк"):
+        session.add(Shop(name=name, is_active=True))
+    await session.commit()
+    logging.info("Default shops seeded")
+
+
 async def _migrate_columns(conn):
     from sqlalchemy import text
     try:
@@ -140,6 +154,12 @@ async def startup():
             await _seed_default_categories(session)
     except Exception as e:
         logging.error(f"Category seeding error: {e}")
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await _seed_default_shops(session)
+    except Exception as e:
+        logging.error(f"Shop seeding error: {e}")
 
     if settings.GOOGLE_SHEETS_ID:
         # На хостингах без отдельного Celery-воркера (например, Bothost)

@@ -3,6 +3,7 @@ const API_BASE = '/admin/api';
 function $(id) { return document.getElementById(id); }
 
 let currentImageFile = null;
+let shopsCache = [];
 
 async function api(path, options = {}) {
     const res = await fetch(`${API_BASE}${path}`, options);
@@ -29,6 +30,7 @@ async function login() {
         $('login-box').style.display = 'none';
         $('admin-panel').style.display = 'block';
         $('login-error').style.display = 'none';
+        await loadShops();
         await loadCategories();
         await loadProducts();
         await loadGiveaways();
@@ -159,9 +161,29 @@ async function addCategory() {
     await loadCategories();
 }
 
+async function loadShops() {
+    shopsCache = await api('/shops');
+    // Точки наличия — фиксированные колонки после "Фото" и перед кнопкой
+    // сохранения. Наличие ведётся вручную: у LiveSklad нет публичного
+    // метода "остатки по складу", только мастерские/заказы/касса/корзина.
+    const headRow = $('products-thead-row');
+    document.querySelectorAll('.shop-stock-th').forEach(th => th.remove());
+    const lastTh = headRow.lastElementChild;
+    shopsCache.forEach(shop => {
+        const th = document.createElement('th');
+        th.className = 'shop-stock-th';
+        th.textContent = shop.name;
+        headRow.insertBefore(th, lastTh);
+    });
+}
+
 async function loadProducts(q = '') {
     const products = await api(`/products?q=${encodeURIComponent(q)}`);
-    $('products-list').innerHTML = products.map(p => `
+    $('products-list').innerHTML = products.map(p => {
+        const stockCells = shopsCache.map(shop => `
+            <td><input type="number" min="0" class="edit-prod-shop-stock" data-shop-id="${shop.id}" value="${(p.stocks && p.stocks[shop.id]) || 0}" style="width:70px;"></td>
+        `).join('');
+        return `
         <tr class="product-row" data-id="${p.id}">
             <td><input type="text" class="edit-prod-name" value="${escapeHtml(p.name)}"></td>
             <td><input type="text" class="edit-prod-category" value="${escapeHtml(p.category || '')}"></td>
@@ -172,10 +194,11 @@ async function loadProducts(q = '') {
                 <input type="text" class="edit-prod-photo" value="${escapeHtml(p.photo_url || '')}" placeholder="URL">
                 <input type="file" class="edit-prod-file" accept="image/*" style="margin-top:4px;">
             </td>
-            <td><input type="number" class="edit-prod-stock" value="${p.stock || 0}"></td>
+            ${stockCells}
             <td><button class="btn btn-primary save-prod">Сохр.</button></td>
         </tr>
-    `).join('') || '<tr><td colspan="8" style="text-align:center; color:#999;">Нет товаров</td></tr>';
+        `;
+    }).join('') || `<tr><td colspan="${7 + shopsCache.length}" style="text-align:center; color:#999;">Нет товаров</td></tr>`;
 
     document.querySelectorAll('.save-prod').forEach(btn => {
         btn.addEventListener('click', async e => {
@@ -192,6 +215,10 @@ async function saveProduct(row) {
     if (fileInput.files && fileInput.files[0]) {
         photoUrl = await uploadFile(fileInput.files[0]);
     }
+    const stocks = {};
+    row.querySelectorAll('.edit-prod-shop-stock').forEach(input => {
+        stocks[input.dataset.shopId] = parseInt(input.value) || 0;
+    });
     const body = {
         name: row.querySelector('.edit-prod-name').value,
         category: row.querySelector('.edit-prod-category').value,
@@ -199,7 +226,7 @@ async function saveProduct(row) {
         color: row.querySelector('.edit-prod-color').value,
         memory: row.querySelector('.edit-prod-memory').value,
         photo_url: photoUrl || null,
-        stock: parseInt(row.querySelector('.edit-prod-stock').value) || 0,
+        stocks,
     };
     await api(`/products/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     alert('Сохранено');

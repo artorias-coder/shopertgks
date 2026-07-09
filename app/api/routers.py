@@ -109,10 +109,20 @@ async def list_products(category: str | None = None, session: AsyncSession = Dep
 
 @router.get("/products/{product_id}")
 async def get_product(product_id: int, session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(Product).where(Product.id == product_id))
+    result = await session.execute(
+        select(Product).options(selectinload(Product.stocks).selectinload(ProductStock.shop)).where(Product.id == product_id)
+    )
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Product not found")
+    # Наличие по точкам администратор выставляет вручную в панели (см.
+    # /admin/api/products) — у LiveSklad нет публичного метода "остатки по
+    # складу", только мастерские/заказы/касса/корзина/продажи.
+    stocks = [
+        {"shop_id": s.shop_id, "shop_name": s.shop.name if s.shop else None, "quantity": s.quantity}
+        for s in p.stocks
+        if s.shop and s.shop.is_active
+    ]
     return {
         "id": p.id,
         "sku": p.sku,
@@ -126,6 +136,7 @@ async def get_product(product_id: int, session: AsyncSession = Depends(get_db)):
         "old_price": float(p.old_price) if p.old_price else None,
         "discount": float(p.discount) if p.discount else None,
         "stock": p.stock,
+        "stocks": stocks,
         "photo_url": p.photo_url,
         "description": p.description,
         "status": p.status.value,

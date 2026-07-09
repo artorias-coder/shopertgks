@@ -608,6 +608,49 @@ body {
     color: #d98c00;
 }
 
+.shop-availability-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shop-availability-loading,
+.shop-availability-empty {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.shop-availability-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.shop-availability-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.shop-availability-dot.in-stock {
+    background: var(--green);
+}
+
+.shop-availability-dot.out-of-stock {
+    background: #cfcfcf;
+}
+
+.shop-availability-name {
+    flex: 1;
+}
+
+.shop-availability-status {
+    color: var(--muted);
+    font-size: 13px;
+}
+
 .product-detail-old-price {
     font-size: 15px;
     color: var(--muted);

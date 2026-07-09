@@ -11,10 +11,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.config import settings
-from app.models import Category, Product, Giveaway, GiveawayStatus
+from app.models import Category, Product, Giveaway, GiveawayStatus, Shop, ProductStock
 
 
 def _admin_secret() -> bytes:
@@ -92,6 +93,9 @@ class ProductUpdate(BaseModel):
     price: float | None = Field(None, ge=0)
     stock: int | None = Field(None, ge=0)
     status: str | None = Field(None, max_length=20)
+    # {shop_id: quantity} — наличие по точкам администратор выставляет вручную,
+    # т.к. у LiveSklad нет публичного метода "остатки по складу".
+    stocks: dict[int, int] | None = None
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -313,13 +317,19 @@ async def admin_delete_giveaway(
     return {"ok": True}
 
 
+@router.get("/api/shops")
+async def list_shops(session: AsyncSession = Depends(get_db), _=Depends(_check_admin)):
+    result = await session.execute(select(Shop).where(Shop.is_active == True).order_by(Shop.id))
+    return [{"id": s.id, "name": s.name} for s in result.scalars().all()]
+
+
 @router.get("/api/products")
 async def list_products(
     session: AsyncSession = Depends(get_db),
     _=Depends(_check_admin),
     q: str = "",
 ):
-    stmt = select(Product).order_by(Product.name)
+    stmt = select(Product).options(selectinload(Product.stocks)).order_by(Product.name)
     if q:
         stmt = stmt.where(Product.name.ilike(f"%{q}%"))
     result = await session.execute(stmt.limit(200))
@@ -336,6 +346,7 @@ async def list_products(
             "price": float(p.price) if p.price else None,
             "stock": p.stock,
             "status": p.status.value,
+            "stocks": {str(s.shop_id): s.quantity for s in p.stocks},
         }
         for p in rows
     ]
@@ -368,6 +379,27 @@ async def update_product(
         p.stock = data.stock
     if data.status is not None:
         p.status = data.status
+
+    if data.stocks is not None:
+        # Наличие по точкам выставляется вручную (нет API остатков у
+        # LiveSklad) — апсертим ProductStock и пересчитываем общий p.stock
+        # как сумму по всем точкам, чтобы старые места, где используется
+        # общее число (каталог, фильтры), тоже оставались верными.
+        existing_stmt = select(ProductStock).where(ProductStock.product_id == p.id)
+        existing_result = await session.execute(existing_stmt)
+        existing_by_shop = {row.shop_id: row for row in existing_result.scalars().all()}
+        for shop_id, quantity in data.stocks.items():
+            quantity = max(0, int(quantity))
+            row = existing_by_shop.get(shop_id)
+            if row:
+                row.quantity = quantity
+            else:
+                session.add(ProductStock(product_id=p.id, shop_id=shop_id, quantity=quantity))
+        await session.flush()
+        total_stmt = select(ProductStock).where(ProductStock.product_id == p.id)
+        total_result = await session.execute(total_stmt)
+        p.stock = sum(row.quantity for row in total_result.scalars().all())
+
     await session.commit()
     return {"ok": True}
 
