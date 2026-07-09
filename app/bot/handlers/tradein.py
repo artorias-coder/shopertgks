@@ -124,11 +124,9 @@ async def tradein_confirm(callback: types.CallbackQuery, state: FSMContext, sess
         device_condition=data["condition"],
         status=TradeInStatus.NEW,
     )
+    tradein.user = user
     session.add(tradein)
     await session.commit()
-
-    # Refresh to load user relationship
-    await session.refresh(tradein)
 
     try:
         livesklad_id = await create_livesklad_tradein(tradein)

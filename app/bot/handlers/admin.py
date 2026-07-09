@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.orm import selectinload
 
 from app.bot.handlers.client import is_admin
 from app.bot.keyboards import admin_request_keyboard, admin_tradein_keyboard
@@ -18,7 +19,13 @@ router = Router()
 async def new_orders(message: types.Message, session: AsyncSession):
     if not is_admin(message.from_user.id):
         return
-    stmt = select(Order).where(Order.status == OrderStatus.NEW).order_by(desc(Order.created_at)).limit(20)
+    stmt = (
+        select(Order)
+        .where(Order.status == OrderStatus.NEW)
+        .order_by(desc(Order.created_at))
+        .limit(20)
+        .options(selectinload(Order.items), selectinload(Order.user))
+    )
     result = await session.execute(stmt)
     orders = result.scalars().all()
     if not orders:
@@ -33,7 +40,13 @@ async def new_orders(message: types.Message, session: AsyncSession):
 async def tradein_orders(message: types.Message, session: AsyncSession):
     if not is_admin(message.from_user.id):
         return
-    stmt = select(TradeIn).where(TradeIn.status == TradeInStatus.NEW).order_by(desc(TradeIn.created_at)).limit(20)
+    stmt = (
+        select(TradeIn)
+        .where(TradeIn.status == TradeInStatus.NEW)
+        .order_by(desc(TradeIn.created_at))
+        .limit(20)
+        .options(selectinload(TradeIn.user))
+    )
     result = await session.execute(stmt)
     tradeins = result.scalars().all()
     if not tradeins:
@@ -92,7 +105,9 @@ async def sync_livesklad_callback(callback: types.CallbackQuery, session: AsyncS
     if not is_admin(callback.from_user.id):
         await callback.answer("Нет доступа")
         return
-    stmt = select(Order).where(Order.status == OrderStatus.PENDING_SYNC)
+    stmt = select(Order).where(Order.status == OrderStatus.PENDING_SYNC).options(
+        selectinload(Order.items), selectinload(Order.user), selectinload(Order.shop)
+    )
     result = await session.execute(stmt)
     orders = result.scalars().all()
     for order in orders:
@@ -128,7 +143,7 @@ async def show_errors(callback: types.CallbackQuery, session: AsyncSession):
 @router.callback_query(F.data.startswith("admin_confirm:"))
 async def admin_confirm(callback: types.CallbackQuery, session: AsyncSession):
     order_id = int(callback.data.split(":", 1)[1])
-    stmt = select(Order).where(Order.id == order_id)
+    stmt = select(Order).where(Order.id == order_id).options(selectinload(Order.user))
     result = await session.execute(stmt)
     order = result.scalar_one()
     order.status = OrderStatus.CONFIRMED
@@ -140,7 +155,7 @@ async def admin_confirm(callback: types.CallbackQuery, session: AsyncSession):
 @router.callback_query(F.data.startswith("admin_cancel:"))
 async def admin_cancel(callback: types.CallbackQuery, session: AsyncSession):
     order_id = int(callback.data.split(":", 1)[1])
-    stmt = select(Order).where(Order.id == order_id)
+    stmt = select(Order).where(Order.id == order_id).options(selectinload(Order.user))
     result = await session.execute(stmt)
     order = result.scalar_one()
     order.status = OrderStatus.CANCELLED
@@ -152,7 +167,9 @@ async def admin_cancel(callback: types.CallbackQuery, session: AsyncSession):
 @router.callback_query(F.data.startswith("admin_resync:"))
 async def admin_resync(callback: types.CallbackQuery, session: AsyncSession):
     order_id = int(callback.data.split(":", 1)[1])
-    stmt = select(Order).where(Order.id == order_id)
+    stmt = select(Order).where(Order.id == order_id).options(
+        selectinload(Order.user), selectinload(Order.items), selectinload(Order.shop)
+    )
     result = await session.execute(stmt)
     order = result.scalar_one()
     try:
@@ -216,7 +233,7 @@ async def admin_tradein_process(callback: types.CallbackQuery, session: AsyncSes
 @router.callback_query(F.data.startswith("admin_tradein_contact:"))
 async def admin_tradein_contact(callback: types.CallbackQuery, session: AsyncSession):
     tradein_id = int(callback.data.split(":", 1)[1])
-    stmt = select(TradeIn).where(TradeIn.id == tradein_id)
+    stmt = select(TradeIn).where(TradeIn.id == tradein_id).options(selectinload(TradeIn.user))
     result = await session.execute(stmt)
     t = result.scalar_one()
     await callback.message.answer(f"Связаться с клиентом Trade-in #{t.id}: {t.user.phone or '@'+t.user.username}")

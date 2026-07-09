@@ -324,7 +324,6 @@ function renderProduct(productId) {
                 ${specsHtml}
             </div>
             <div class="product-actions">
-                <button class="add-to-cart-btn" data-product-id="${p.id}">В корзину</button>
                 <button class="order-btn" data-product-id="${p.id}">Заказать</button>
             </div>
         </div>
@@ -400,6 +399,7 @@ function formatDate(iso) {
 
 function updateCartBadge() {
     const badge = document.getElementById('cart-badge');
+    if (!badge) return;
     const count = app.cart.reduce((sum, i) => sum + i.quantity, 0);
     badge.textContent = count;
     badge.classList.toggle('show', count > 0);
@@ -919,17 +919,11 @@ function bindEvents() {
     });
 
     document.getElementById('product-detail').addEventListener('click', e => {
-        const addBtn = e.target.closest('.add-to-cart-btn');
         const orderBtn = e.target.closest('.order-btn');
-        if (!addBtn && !orderBtn) return;
-        const productId = parseInt((addBtn || orderBtn).dataset.productId);
-        if (orderBtn) {
-            const product = app.products.find(p => p.id === productId);
-            if (product) confirmProductOrder(product);
-        } else {
-            addToCart(productId);
-            app.tg.showAlert('Товар добавлен в корзину');
-        }
+        if (!orderBtn) return;
+        const productId = parseInt(orderBtn.dataset.productId);
+        const product = app.products.find(p => p.id === productId);
+        if (product) confirmProductOrder(product);
     });
 
     document.getElementById('cart-content').addEventListener('click', e => {

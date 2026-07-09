@@ -255,6 +255,7 @@ async def create_order(
         .options(
             selectinload(Order.items).selectinload(OrderItem.product),
             selectinload(Order.shop),
+            selectinload(Order.user),
         )
     )
     order = result.scalar_one()
@@ -269,6 +270,14 @@ async def create_order(
         order.sync_message = str(e)[:500]
 
     await session.commit()
+
+    bot = await _get_bot()
+    if bot:
+        try:
+            await notify_admins_new_order(bot, order)
+            await notify_user_order_status(bot, payload.telegram_id, order)
+        except Exception:
+            logging.exception("Failed to notify about order %s", order.id)
 
     return {
         "id": order.id,

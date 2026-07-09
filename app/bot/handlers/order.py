@@ -160,6 +160,7 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext, sessio
         comment=data.get("comment", ""),
         sync_status=SyncStatus.PENDING,
     )
+    order.user = user
     session.add(order)
     await session.flush()
 
@@ -175,6 +176,7 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext, sessio
             total=item.price_snapshot * item.quantity,
         )
         session.add(order_item)
+        order.items.append(order_item)
 
     for item in cart.items:
         await session.delete(item)
@@ -385,6 +387,7 @@ async def send_request(callback: types.CallbackQuery, state: FSMContext, session
         comment=comment,
         sync_status=SyncStatus.PENDING,
     )
+    order.user = user
     session.add(order)
     await session.flush()
 
@@ -399,6 +402,7 @@ async def send_request(callback: types.CallbackQuery, state: FSMContext, session
             total=product.price,
         )
         session.add(order_item)
+        order.items.append(order_item)
 
     await session.commit()
 

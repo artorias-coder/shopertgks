@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.config import settings
-from app.models import Category, Product
+from app.models import Category, Product, Giveaway, GiveawayStatus
 
 
 def _admin_secret() -> bytes:
@@ -60,6 +60,25 @@ class CategoryCreate(BaseModel):
 
 
 class CategoryUpdate(CategoryCreate):
+    pass
+
+
+class GiveawayCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str | None = Field(None, max_length=2000)
+    prize: str | None = Field(None, max_length=500)
+    channel_url: str | None = Field(None, max_length=1000)
+    status: str = Field("active")
+
+    @validator("status")
+    def validate_status(cls, v):
+        allowed = {s.value for s in GiveawayStatus}
+        if v not in allowed:
+            raise ValueError(f"status must be one of {allowed}")
+        return v
+
+
+class GiveawayUpdate(GiveawayCreate):
     pass
 
 
@@ -191,6 +210,78 @@ async def delete_category(
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
     await session.delete(cat)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.get("/api/giveaways")
+async def admin_list_giveaways(session: AsyncSession = Depends(get_db), _=Depends(_check_admin)):
+    from sqlalchemy import desc
+    result = await session.execute(select(Giveaway).order_by(desc(Giveaway.created_at)))
+    rows = result.scalars().all()
+    return [
+        {
+            "id": g.id,
+            "title": g.title,
+            "description": g.description,
+            "prize": g.prize,
+            "channel_url": g.channel_url,
+            "status": g.status.value,
+            "created_at": g.created_at.isoformat(),
+        }
+        for g in rows
+    ]
+
+
+@router.post("/api/giveaways")
+async def admin_create_giveaway(
+    data: GiveawayCreate,
+    session: AsyncSession = Depends(get_db),
+    _=Depends(_check_admin),
+):
+    giveaway = Giveaway(
+        title=data.title.strip(),
+        description=data.description,
+        prize=data.prize,
+        channel_url=data.channel_url,
+        status=GiveawayStatus(data.status),
+    )
+    session.add(giveaway)
+    await session.commit()
+    return {"id": giveaway.id}
+
+
+@router.put("/api/giveaways/{giveaway_id}")
+async def admin_update_giveaway(
+    giveaway_id: int,
+    data: GiveawayUpdate,
+    session: AsyncSession = Depends(get_db),
+    _=Depends(_check_admin),
+):
+    result = await session.execute(select(Giveaway).where(Giveaway.id == giveaway_id))
+    giveaway = result.scalar_one_or_none()
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    giveaway.title = data.title.strip()
+    giveaway.description = data.description
+    giveaway.prize = data.prize
+    giveaway.channel_url = data.channel_url
+    giveaway.status = GiveawayStatus(data.status)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.delete("/api/giveaways/{giveaway_id}")
+async def admin_delete_giveaway(
+    giveaway_id: int,
+    session: AsyncSession = Depends(get_db),
+    _=Depends(_check_admin),
+):
+    result = await session.execute(select(Giveaway).where(Giveaway.id == giveaway_id))
+    giveaway = result.scalar_one_or_none()
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    await session.delete(giveaway)
     await session.commit()
     return {"ok": True}
 

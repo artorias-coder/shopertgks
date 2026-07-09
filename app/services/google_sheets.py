@@ -3,11 +3,17 @@ import io
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.models import Product, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus
 from app.config import settings
 from app.services.livesklad import fetch_shops
 from app.services.product_specs import extract_color, extract_memory, get_specs
+
+
+def _upsert_stmt(table):
+    """Pick the right dialect-specific upsert builder (Bothost free plan may run on SQLite)."""
+    return sqlite_insert(table) if settings.is_sqlite else pg_insert(table)
 
 
 SHEET_EXPORT_URL = "https://docs.google.com/spreadsheets/d/{id}/export?format=csv"
@@ -157,7 +163,7 @@ async def sync_products(session: AsyncSession) -> dict:
                 "status": product_status,
             }
 
-            stmt = insert(Product).values(sku=sku, **values).on_conflict_do_update(
+            stmt = _upsert_stmt(Product).values(sku=sku, **values).on_conflict_do_update(
                 index_elements=["sku"],
                 set_=values,
             )
@@ -216,7 +222,7 @@ async def _sync_shops(session: AsyncSession) -> None:
         shop_id = shop.get("id")
         if not shop_id:
             continue
-        stmt = insert(Shop).values(
+        stmt = _upsert_stmt(Shop).values(
             livesklad_id=shop_id,
             name=shop.get("name", ""),
             address=shop.get("address", ""),

@@ -5,8 +5,8 @@ from app.config import settings
 MAIN_MENU_CLIENT = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🛍 Каталог"), KeyboardButton(text="🔎 Поиск")],
-        [KeyboardButton(text="� Trade-in"), KeyboardButton(text="🎁 Розыгрыши")],
-        [KeyboardButton(text="� Узнать лучшую цену"), KeyboardButton(text="💬 Написать менеджеру")],
+        [KeyboardButton(text="🔄 Trade-in"), KeyboardButton(text="🎁 Розыгрыши")],
+        [KeyboardButton(text="💰 Узнать лучшую цену"), KeyboardButton(text="💬 Написать менеджеру")],
         [KeyboardButton(text="🛒 Корзина"), KeyboardButton(text="📦 Мои заказы")],
     ],
     resize_keyboard=True,
@@ -42,8 +42,8 @@ def catalog_menu(categories):
         [InlineKeyboardButton(text=f"{cat}", callback_data=f"category:{cat}")]
         for cat in categories
     ]
-    buttons.append([InlineKeyboardButton(text="� Поиск по товарам", callback_data="search")])
-    buttons.append([InlineKeyboardButton(text="�🔙 Назад", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton(text="🔍 Поиск по товарам", callback_data="search")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -77,7 +77,7 @@ def product_specs_keyboard(product_id: int):
 def request_confirm_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="� Отправить заявку", callback_data="send_request")],
+            [InlineKeyboardButton(text="📨 Отправить заявку", callback_data="send_request")],
             [InlineKeyboardButton(text="✏️ Изменить данные", callback_data="edit_request")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_request")],
         ]

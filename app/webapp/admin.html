@@ -55,6 +55,7 @@
             <div class="admin-tabs">
                 <div class="admin-tab active" data-tab="categories">Категории</div>
                 <div class="admin-tab" data-tab="products">Товары</div>
+                <div class="admin-tab" data-tab="giveaways">Розыгрыши</div>
             </div>
 
             <div class="admin-section active" id="tab-categories">
@@ -122,6 +123,42 @@
                         </thead>
                         <tbody id="products-list"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <div class="admin-section" id="tab-giveaways">
+                <div class="admin-card">
+                    <div class="admin-card-title">Добавить розыгрыш</div>
+                    <div class="form-row">
+                        <label>Название</label>
+                        <input type="text" id="giveaway-title" placeholder="Розыгрыш авто в Kingstore">
+                    </div>
+                    <div class="form-row">
+                        <label>Описание</label>
+                        <textarea id="giveaway-desc" rows="2" placeholder="Главный приз — автомобиль. Чтобы участвовать, подпишись..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <label>Приз</label>
+                        <input type="text" id="giveaway-prize" placeholder="Автомобиль">
+                    </div>
+                    <div class="form-row">
+                        <label>Ссылка на канал</label>
+                        <input type="text" id="giveaway-channel" placeholder="https://t.me/kingstoreshop">
+                    </div>
+                    <div class="form-row">
+                        <label>Статус</label>
+                        <select id="giveaway-status">
+                            <option value="active">Активен</option>
+                            <option value="completed">Завершён</option>
+                            <option value="cancelled">Отменён</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="giveaway-add-btn">Добавить</button>
+                </div>
+
+                <div class="admin-card">
+                    <div class="admin-card-title">Розыгрыши</div>
+                    <div id="giveaways-list"></div>
                 </div>
             </div>
         </div>

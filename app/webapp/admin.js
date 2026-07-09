@@ -31,6 +31,7 @@ async function login() {
         $('login-error').style.display = 'none';
         await loadCategories();
         await loadProducts();
+        await loadGiveaways();
     } catch (e) {
         $('login-error').style.display = 'block';
     }
@@ -205,6 +206,93 @@ async function saveProduct(row) {
     await loadProducts($('product-search').value);
 }
 
+async function loadGiveaways() {
+    const giveaways = await api('/giveaways');
+    $('giveaways-list').innerHTML = giveaways.map(g => `
+        <div class="category-edit" data-id="${g.id}">
+            <div class="form-row">
+                <label>Название</label>
+                <input type="text" class="edit-gw-title" value="${escapeHtml(g.title)}">
+            </div>
+            <div class="form-row">
+                <label>Описание</label>
+                <textarea class="edit-gw-desc" rows="2">${escapeHtml(g.description || '')}</textarea>
+            </div>
+            <div class="form-row">
+                <label>Приз</label>
+                <input type="text" class="edit-gw-prize" value="${escapeHtml(g.prize || '')}">
+            </div>
+            <div class="form-row">
+                <label>Ссылка на канал</label>
+                <input type="text" class="edit-gw-channel" value="${escapeHtml(g.channel_url || '')}">
+            </div>
+            <div class="form-row">
+                <label>Статус</label>
+                <select class="edit-gw-status">
+                    <option value="active" ${g.status === 'active' ? 'selected' : ''}>Активен</option>
+                    <option value="completed" ${g.status === 'completed' ? 'selected' : ''}>Завершён</option>
+                    <option value="cancelled" ${g.status === 'cancelled' ? 'selected' : ''}>Отменён</option>
+                </select>
+            </div>
+            <button class="btn btn-primary save-gw">Сохранить</button>
+            <button class="btn btn-danger delete-gw">Удалить</button>
+        </div>
+    `).join('') || '<div style="color:#999;">Нет розыгрышей</div>';
+
+    document.querySelectorAll('.save-gw').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            const card = e.target.closest('.category-edit');
+            await saveGiveaway(card);
+        });
+    });
+    document.querySelectorAll('.delete-gw').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            const card = e.target.closest('.category-edit');
+            if (confirm('Удалить розыгрыш?')) await deleteGiveaway(card.dataset.id);
+        });
+    });
+}
+
+async function saveGiveaway(card) {
+    const id = card.dataset.id;
+    const body = {
+        title: card.querySelector('.edit-gw-title').value,
+        description: card.querySelector('.edit-gw-desc').value,
+        prize: card.querySelector('.edit-gw-prize').value,
+        channel_url: card.querySelector('.edit-gw-channel').value,
+        status: card.querySelector('.edit-gw-status').value,
+    };
+    await api(`/giveaways/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    alert('Сохранено');
+    await loadGiveaways();
+}
+
+async function deleteGiveaway(id) {
+    await api(`/giveaways/${id}`, { method: 'DELETE' });
+    await loadGiveaways();
+}
+
+async function addGiveaway() {
+    const body = {
+        title: $('giveaway-title').value,
+        description: $('giveaway-desc').value,
+        prize: $('giveaway-prize').value,
+        channel_url: $('giveaway-channel').value,
+        status: $('giveaway-status').value,
+    };
+    if (!body.title.trim()) {
+        alert('Укажите название розыгрыша');
+        return;
+    }
+    await api('/giveaways', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    $('giveaway-title').value = '';
+    $('giveaway-desc').value = '';
+    $('giveaway-prize').value = '';
+    $('giveaway-channel').value = '';
+    $('giveaway-status').value = 'active';
+    await loadGiveaways();
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     return String(text)
@@ -219,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('admin-login-btn').addEventListener('click', login);
     $('admin-logout').addEventListener('click', logout);
     $('cat-add-btn').addEventListener('click', addCategory);
+    $('giveaway-add-btn').addEventListener('click', addGiveaway);
     $('cat-image').addEventListener('change', e => {
         const file = e.target.files[0];
         if (file) {
