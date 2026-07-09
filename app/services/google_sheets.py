@@ -77,8 +77,20 @@ def _parse_sheet_csv(content: str):
         if not name:
             continue
 
-        # Support both old numeric columns and new named columns
-        if "price_sale" in data or "price_card" in data:
+        # Реальная структура таблицы (проверено на актуальной выгрузке):
+        # ID, Category, Name, Полная группа, price, price_sale, photo_url, description
+        # "price" — обычная/старая цена, "price_sale" — цена продажи (со скидкой).
+        # Старые форматы с "price_card"/числовыми колонками "1"/"2" поддержаны как fallback.
+        if "price" in data or "price_sale" in data:
+            base_price = _parse_price(data.get("price", ""))
+            sale_price = _parse_price(data.get("price_sale", ""))
+            if sale_price is not None:
+                cash_price = sale_price
+                card_price = base_price if base_price is not None and base_price > sale_price else None
+            else:
+                cash_price = base_price
+                card_price = None
+        elif "price_card" in data:
             cash_price = _parse_price(data.get("price_sale", ""))
             card_price = _parse_price(data.get("price_card", ""))
         else:
@@ -97,7 +109,26 @@ def _parse_sheet_csv(content: str):
         if sim:
             display_name += f" ({sim})"
 
-        sku = _build_sku({"name": name, "storage": memory, "color": color or "", "sim": sim})
+        sheet_id = data.get("id", "").strip()
+        if sheet_id:
+            # Уникальный ID из таблицы даёт стабильный и коллизионно-безопасный SKU
+            # (в отличие от построения из текста имени, которое может совпасть
+            # у разных товаров, например одинаковые модели без цвета/памяти).
+            sku = f"gs{sheet_id}"
+        else:
+            sku = _build_sku({"name": name, "storage": memory, "color": color or "", "sim": sim})
+
+        # photo_url раньше вообще не читался из таблицы — все товары уходили без фото.
+        photo_url = data.get("photo_url", "").strip()
+        if photo_url and not photo_url.lower().startswith(("http://", "https://")):
+            # В таблице встречаются некорректные значения вида
+            # "airpods-1.png (2400×2400)" — это не ссылка, а имя файла с размером.
+            photo_url = ""
+
+        # description раньше всегда затирался общей заглушкой "Категория: X",
+        # даже если в таблице было реальное описание.
+        sheet_description = data.get("description", "").strip()
+        description = sheet_description or f"Категория: {category}"
 
         products.append({
             "sku": sku,
@@ -106,11 +137,12 @@ def _parse_sheet_csv(content: str):
             "price": cash_price,
             "old_price": card_price,
             "discount": card_price - cash_price if card_price and cash_price else None,
-            "description": f"Категория: {category}",
+            "description": description,
             "color": color,
             "memory": memory,
             "specs": specs,
             "stock": 1,
+            "photo_url": photo_url or None,
         })
 
     return products
