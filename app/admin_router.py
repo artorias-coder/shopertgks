@@ -1,5 +1,6 @@
 import hmac
 import hashlib
+import os
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -97,17 +98,34 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 WEBAPP_DIR = Path(__file__).resolve().parent / "webapp"
 ADMIN_HTML = WEBAPP_DIR / "admin.html"
-UPLOADS_DIR = WEBAPP_DIR / "uploads"
 
-try:
-    UPLOADS_DIR.mkdir(exist_ok=True)
-except OSError as e:
-    # На некоторых хостингах (например, если /app смонтирован как volume с
-    # другими правами) создать папку на старте не получается — не роняем
-    # всё приложение из-за этого, загрузка картинок в этом случае просто
-    # вернёт понятную ошибку вместо падения при импорте.
-    import logging
-    logging.getLogger("admin_router").warning(f"Не удалось создать {UPLOADS_DIR}: {e}")
+# Bothost монтирует /app как volume, где непривилегированному пользователю
+# нельзя создавать новые папки внутри кода приложения, и выделяет отдельную
+# постоянную директорию /app/data, которая переживает рестарты (см. DATA_DIR
+# в их документации). Пробуем по порядку: явный DATA_DIR -> /app/data (если
+# он существует, т.е. мы на Bothost) -> старый путь webapp/uploads (локальная
+# разработка). Если ни один вариант не доступен — не роняем приложение,
+# просто отключаем загрузку картинок с понятной ошибкой.
+import logging as _logging
+
+_DATA_DIR = os.getenv("DATA_DIR")
+_CANDIDATES = []
+if _DATA_DIR:
+    _CANDIDATES.append(Path(_DATA_DIR) / "uploads")
+if Path("/app/data").is_dir():
+    _CANDIDATES.append(Path("/app/data") / "uploads")
+_CANDIDATES.append(WEBAPP_DIR / "uploads")
+
+UPLOADS_DIR = _CANDIDATES[0]
+for _candidate in _CANDIDATES:
+    try:
+        _candidate.mkdir(exist_ok=True, parents=True)
+        UPLOADS_DIR = _candidate
+        break
+    except OSError as e:
+        _logging.getLogger("admin_router").warning(f"Не удалось создать {_candidate}: {e}")
+else:
+    _logging.getLogger("admin_router").warning("Ни одна из директорий для загрузок недоступна для записи")
 
 
 def _check_admin(request: Request):

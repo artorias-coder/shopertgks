@@ -10,7 +10,7 @@ import logging
 from app.database import engine, AsyncSessionLocal
 from app.models import Base
 from app.api.routers import router as api_router
-from app.admin_router import router as admin_router
+from app.admin_router import router as admin_router, UPLOADS_DIR
 from app.config import settings
 
 WEBAPP_DIR = Path(__file__).resolve().parent / "webapp"
@@ -31,12 +31,6 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api")
 app.include_router(admin_router)
-
-UPLOADS_DIR = WEBAPP_DIR / "uploads"
-try:
-    UPLOADS_DIR.mkdir(exist_ok=True, parents=True)
-except OSError as e:
-    logging.warning(f"Не удалось создать {UPLOADS_DIR}: {e}")
 
 if UPLOADS_DIR.is_dir():
     app.mount("/webapp/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
