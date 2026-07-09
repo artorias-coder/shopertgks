@@ -63,7 +63,18 @@ async def list_products(category: str | None = None, session: AsyncSession = Dep
     stmt = select(Product).where(Product.status.in_(VISIBLE_PRODUCT_STATUSES))
     if category:
         stmt = stmt.where(Product.category == category)
-    result = await session.execute(stmt.order_by(Product.name))
+    try:
+        result = await session.execute(stmt.order_by(Product.name))
+    except Exception as e:
+        # Например, если на проде ещё не применилась миграция ALTER TYPE ...
+        # ADD VALUE 'on_request' — тогда падает весь каталог. Лучше показать
+        # хотя бы активные товары, чем отдать 500 и обрушить весь Mini App.
+        logging.error(f"list_products broad query failed, falling back to ACTIVE only: {e}")
+        await session.rollback()
+        fallback_stmt = select(Product).where(Product.status == ProductStatus.ACTIVE)
+        if category:
+            fallback_stmt = fallback_stmt.where(Product.category == category)
+        result = await session.execute(fallback_stmt.order_by(Product.name))
     products = result.scalars().all()
     return [
         {
@@ -131,12 +142,22 @@ async def list_categories(session: AsyncSession = Depends(get_db)):
             for c in categories
         ]
     # Fallback: derive from products
-    result = await session.execute(
-        select(Product.category)
-        .where(Product.status.in_(VISIBLE_PRODUCT_STATUSES))
-        .group_by(Product.category)
-        .order_by(Product.category)
-    )
+    try:
+        result = await session.execute(
+            select(Product.category)
+            .where(Product.status.in_(VISIBLE_PRODUCT_STATUSES))
+            .group_by(Product.category)
+            .order_by(Product.category)
+        )
+    except Exception as e:
+        logging.error(f"list_categories broad query failed, falling back to ACTIVE only: {e}")
+        await session.rollback()
+        result = await session.execute(
+            select(Product.category)
+            .where(Product.status == ProductStatus.ACTIVE)
+            .group_by(Product.category)
+            .order_by(Product.category)
+        )
     return [{"id": None, "name": r, "description": None, "image_url": None, "icon_emoji": None, "tile_size": "medium"} for r in result.scalars().all() if r]
 
 

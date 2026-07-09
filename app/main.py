@@ -76,6 +76,14 @@ async def _migrate_columns(conn):
     except Exception as e:
         logging.warning(f"Product columns migration skipped: {e}")
     try:
+        # Новое значение статуса товара (ON_REQUEST) в models.py не появляется
+        # само в уже существующем нативном PG enum "productstatus" — без ALTER
+        # TYPE любой запрос со значением 'on_request' падает с ошибкой
+        # "invalid input value for enum", что ломало /api/products целиком.
+        await conn.execute(text("ALTER TYPE productstatus ADD VALUE IF NOT EXISTS 'on_request'"))
+    except Exception as e:
+        logging.warning(f"ProductStatus enum migration skipped: {e}")
+    try:
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS categories (
                 id SERIAL PRIMARY KEY,

@@ -128,27 +128,52 @@ function init() {
         app.user = app.tg.initDataUnsafe.user;
     }
 
-    loadData().then(() => {
-        renderHome();
-        renderCategoryChips();
-        bindEvents();
-    }).catch(err => {
+    // bindEvents() должен выполниться в любом случае — иначе один упавший
+    // запрос (например, каталог) обесточивает вообще все кнопки в приложении,
+    // включая те экраны, для которых данные загрузились нормально.
+    loadData().catch(err => {
         console.error('loadData error:', err);
-        document.getElementById('categories-grid').innerHTML = '<div class="empty-state">Ошибка загрузки данных</div>';
+    }).finally(() => {
+        try {
+            renderHome();
+            renderCategoryChips();
+        } catch (err) {
+            console.error('renderHome error:', err);
+            document.getElementById('categories-grid').innerHTML = '<div class="empty-state">Ошибка загрузки данных</div>';
+        }
+        bindEvents();
     });
 }
 
+async function _fetchJsonArray(url) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            console.error(`${url} -> HTTP ${res.status}`);
+            return [];
+        }
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+    } catch (err) {
+        console.error(`${url} failed:`, err);
+        return [];
+    }
+}
+
 async function loadData() {
-    const [productsRes, categoriesRes, shopsRes, giveawaysRes] = await Promise.all([
-        fetch(`${API_URL}/products`),
-        fetch(`${API_URL}/categories`),
-        fetch(`${API_URL}/shops`),
-        fetch(`${API_URL}/giveaways`),
+    // Каждый запрос обрабатывается независимо: если, например, каталог
+    // товаров временно недоступен, это не должно уронить розыгрыши, магазины
+    // или саму возможность нажимать на кнопки в приложении.
+    const [products, categories, shops, giveawaysList] = await Promise.all([
+        _fetchJsonArray(`${API_URL}/products`),
+        _fetchJsonArray(`${API_URL}/categories`),
+        _fetchJsonArray(`${API_URL}/shops`),
+        _fetchJsonArray(`${API_URL}/giveaways`),
     ]);
-    app.products = await productsRes.json();
-    app.categories = await categoriesRes.json();
-    app.shops = await shopsRes.json();
-    app.giveawaysList = await giveawaysRes.json();
+    app.products = products;
+    app.categories = categories;
+    app.shops = shops;
+    app.giveawaysList = giveawaysList;
     if (app.shops.length > 0) {
         app.selectedShop = app.shops[0];
     }
