@@ -31,7 +31,18 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api")
 app.include_router(admin_router)
-app.mount("/webapp/uploads", StaticFiles(directory=str(WEBAPP_DIR / "uploads")), name="uploads")
+
+UPLOADS_DIR = WEBAPP_DIR / "uploads"
+try:
+    UPLOADS_DIR.mkdir(exist_ok=True, parents=True)
+except OSError as e:
+    logging.warning(f"Не удалось создать {UPLOADS_DIR}: {e}")
+
+if UPLOADS_DIR.is_dir():
+    app.mount("/webapp/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+else:
+    logging.warning(f"{UPLOADS_DIR} недоступна — раздел /webapp/uploads не смонтирован")
+
 app.mount("/webapp", StaticFiles(directory=str(WEBAPP_DIR), html=True), name="webapp")
 
 

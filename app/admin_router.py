@@ -98,7 +98,16 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 WEBAPP_DIR = Path(__file__).resolve().parent / "webapp"
 ADMIN_HTML = WEBAPP_DIR / "admin.html"
 UPLOADS_DIR = WEBAPP_DIR / "uploads"
-UPLOADS_DIR.mkdir(exist_ok=True)
+
+try:
+    UPLOADS_DIR.mkdir(exist_ok=True)
+except OSError as e:
+    # На некоторых хостингах (например, если /app смонтирован как volume с
+    # другими правами) создать папку на старте не получается — не роняем
+    # всё приложение из-за этого, загрузка картинок в этом случае просто
+    # вернёт понятную ошибку вместо падения при импорте.
+    import logging
+    logging.getLogger("admin_router").warning(f"Не удалось создать {UPLOADS_DIR}: {e}")
 
 
 def _check_admin(request: Request):
@@ -370,7 +379,11 @@ async def upload_image(
 
     filename = f"{uuid.uuid4().hex}{ext}"
     dest = UPLOADS_DIR / filename
-    with open(dest, "wb") as f:
-        f.write(content)
+    try:
+        UPLOADS_DIR.mkdir(exist_ok=True, parents=True)
+        with open(dest, "wb") as f:
+            f.write(content)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Не удалось сохранить файл на сервере: {e}")
     url = f"/webapp/uploads/{filename}"
     return {"url": url}
