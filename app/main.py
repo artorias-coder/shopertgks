@@ -111,6 +111,21 @@ async def startup():
     except Exception as e:
         logging.error(f"Category seeding error: {e}")
 
+    if settings.GOOGLE_SHEETS_ID:
+        # На хостингах без отдельного Celery-воркера (например, Bothost)
+        # запланированная через .delay() синхронизация никогда не выполняется —
+        # некому забрать задачу из очереди. Поэтому синхронизируем каталог с
+        # Google Sheets прямо при каждом старте приложения, чтобы данные не
+        # оставались навсегда устаревшими между ручными запусками из админки.
+        try:
+            from app.services.google_sheets import sync_products
+
+            async with AsyncSessionLocal() as session:
+                stats = await sync_products(session)
+            logging.info(f"Google Sheets sync at startup: {stats}")
+        except Exception as e:
+            logging.error(f"Google Sheets sync at startup failed: {e}")
+
     if settings.WEBHOOK_URL and settings.BOT_TOKEN:
         try:
             from app.run_bot import get_bot_and_dispatcher, set_bot_menu_button

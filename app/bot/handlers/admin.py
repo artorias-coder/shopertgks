@@ -10,7 +10,7 @@ from app.models import Order, OrderStatus, SyncStatus, SyncLog, TradeIn, TradeIn
 from app.services.livesklad import create_livesklad_order
 from app.config import settings
 from app.services.notifications import notify_user_order_status
-from app.tasks import sync_google_sheets
+from app.services.google_sheets import sync_products
 
 router = Router()
 
@@ -92,12 +92,23 @@ async def sync_menu(message: types.Message):
 
 
 @router.callback_query(F.data == "sync_sheets")
-async def sync_sheets_callback(callback: types.CallbackQuery):
+async def sync_sheets_callback(callback: types.CallbackQuery, session: AsyncSession):
     if not is_admin(callback.from_user.id):
         await callback.answer("Нет доступа")
         return
-    sync_google_sheets.delay()
-    await callback.answer("Синхронизация Google Sheets запущена")
+    # На хостинге без отдельного Celery-воркера (например, Bothost) задача,
+    # поставленная через .delay(), никогда не выполнится — некому её забрать
+    # из очереди. Поэтому синхронизируем прямо здесь и ждём результат.
+    await callback.answer("Синхронизация запущена, подождите...")
+    try:
+        stats = await sync_products(session)
+        await callback.message.answer(
+            f"Синхронизация Google Sheets завершена.\n"
+            f"Создано: {stats['created']}, обновлено: {stats['updated']}, "
+            f"скрыто: {stats['hidden']}, ошибок: {stats['errors']}"
+        )
+    except Exception as e:
+        await callback.message.answer(f"Ошибка синхронизации: {e}")
 
 
 @router.callback_query(F.data == "sync_livesklad")

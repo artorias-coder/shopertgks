@@ -14,7 +14,7 @@ from app.models import Product, Order, OrderItem, OrderStatus, ProductStatus, Sh
 from app.services.livesklad import create_livesklad_order, create_livesklad_tradein
 from app.services.notifications import notify_admins_new_order, notify_admins_tradein, notify_user_order_status
 from app.services.telegram_webapp import get_validated_user_id, get_validated_user_name, validate_init_data
-from app.tasks import sync_google_sheets
+from app.services.google_sheets import sync_products
 
 
 async def _get_bot():
@@ -631,9 +631,17 @@ async def invite_to_giveaway(
 
 
 @router.post("/sync")
-async def trigger_sync(_=Depends(_check_admin)):
-    sync_google_sheets.delay()
-    return {"status": "queued"}
+async def trigger_sync(session: AsyncSession = Depends(get_db), _=Depends(_check_admin)):
+    # На хостингах без отдельного Celery-воркера (например, Bothost) задача,
+    # поставленная через .delay(), никогда не будет выполнена — некому её
+    # забрать из очереди. Поэтому синхронизацию запускаем прямо здесь и ждём
+    # результат, а не полагаемся на брокер.
+    try:
+        stats = await sync_products(session)
+        return {"status": "ok", **stats}
+    except Exception as e:
+        logging.exception("Manual Google Sheets sync failed")
+        raise HTTPException(status_code=502, detail=f"Синхронизация не удалась: {e}")
 
 
 @router.get("/logs")

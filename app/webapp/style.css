@@ -52,6 +52,40 @@ body {
     letter-spacing: 1px;
 }
 
+.header-cart-btn {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.cart-badge {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    display: none;
+}
+
+.cart-badge.show {
+    display: flex;
+}
+
 .logo-icon {
     font-size: 24px;
 }
@@ -191,6 +225,15 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+.giveaway-card-img {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
 }
 
 .giveaway-emoji {

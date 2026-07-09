@@ -324,6 +324,7 @@ function renderProduct(productId) {
                 ${specsHtml}
             </div>
             <div class="product-actions">
+                <button class="add-to-cart-btn" data-product-id="${p.id}">В корзину</button>
                 <button class="order-btn" data-product-id="${p.id}">Заказать</button>
             </div>
         </div>
@@ -902,7 +903,10 @@ function bindEvents() {
     document.getElementById('tradein-start').addEventListener('click', () => {
         document.getElementById('tradein-devices').scrollIntoView({ behavior: 'smooth' });
     });
-    document.getElementById('tradein-devices').addEventListener('click', e => {
+    // Делегируем клик на #tradein-body (стабильный узел), а не на
+    // #tradein-devices — тот пересоздаётся заново при каждом
+    // renderTradeinBody(), поэтому напрямую забинженный listener слетал.
+    document.getElementById('tradein-body').addEventListener('click', e => {
         const card = e.target.closest('.tradein-device');
         if (!card) return;
         tradeinSelectDevice(card.dataset.type);
@@ -919,11 +923,22 @@ function bindEvents() {
     });
 
     document.getElementById('product-detail').addEventListener('click', e => {
+        const addBtn = e.target.closest('.add-to-cart-btn');
         const orderBtn = e.target.closest('.order-btn');
-        if (!orderBtn) return;
-        const productId = parseInt(orderBtn.dataset.productId);
-        const product = app.products.find(p => p.id === productId);
-        if (product) confirmProductOrder(product);
+        if (!addBtn && !orderBtn) return;
+        const productId = parseInt((addBtn || orderBtn).dataset.productId);
+        if (orderBtn) {
+            const product = app.products.find(p => p.id === productId);
+            if (product) confirmProductOrder(product);
+        } else {
+            addToCart(productId);
+            showToast('Товар добавлен в корзину');
+        }
+    });
+
+    document.getElementById('header-cart-btn').addEventListener('click', () => {
+        renderCart();
+        showScreen('cart');
     });
 
     document.getElementById('cart-content').addEventListener('click', e => {
