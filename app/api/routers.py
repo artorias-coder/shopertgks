@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, Field
 
 from app.admin_router import _check_admin
+from app.config import settings
 from app.database import get_db
 from app.models import Product, Order, OrderItem, OrderStatus, ProductStatus, Shop, ProductStock, SyncLog, SyncStatus, TradeIn, TradeInStatus, Giveaway, GiveawayParticipant, User
 from app.services.livesklad import create_livesklad_order, create_livesklad_tradein
@@ -50,6 +51,15 @@ def verify_telegram_user(x_telegram_init_data: str | None = Header(default=None,
     return telegram_id
 
 router = APIRouter()
+
+
+@router.get("/me")
+async def get_me(telegram_id: int = Depends(verify_telegram_user)):
+    # Отдельная проверка на бэкенде, а не только скрытие кнопки на фронте —
+    # telegram_id уже провалидирован по HMAC подписи initData, так что его
+    # нельзя подделать со стороны клиента, в отличие от простого JS-флага.
+    is_admin = telegram_id in settings.admin_ids or telegram_id == settings.superadmin_id
+    return {"telegram_id": telegram_id, "is_admin": is_admin}
 
 
 # Товары с ценой-кодом 1/2 из таблицы (нет в наличии / только по запросу)
@@ -668,6 +678,25 @@ async def trigger_sync(session: AsyncSession = Depends(get_db), _=Depends(_check
         return {"status": "ok", **stats}
     except Exception as e:
         logging.exception("Manual Google Sheets sync failed")
+        raise HTTPException(status_code=502, detail=f"Синхронизация не удалась: {e}")
+
+
+@router.post("/sync/webhook")
+async def sync_webhook(token: str | None = None, session: AsyncSession = Depends(get_db)):
+    # Отдельный эндпоинт без cookie-авторизации админки — предназначен для
+    # вызова из Google Apps Script (триггер onEdit на самой таблице), чтобы
+    # изменения в таблице подтягивались за секунды, а не ждали периодический
+    # опрос по таймеру. Работает только если задан GOOGLE_SHEETS_SYNC_TOKEN,
+    # иначе эндпоинт полностью отключён (иначе кто угодно мог бы дёргать синк).
+    if not settings.GOOGLE_SHEETS_SYNC_TOKEN:
+        raise HTTPException(status_code=404, detail="Sync webhook is not configured")
+    if token != settings.GOOGLE_SHEETS_SYNC_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid token")
+    try:
+        stats = await sync_products(session)
+        return {"status": "ok", **stats}
+    except Exception as e:
+        logging.exception("Webhook Google Sheets sync failed")
         raise HTTPException(status_code=502, detail=f"Синхронизация не удалась: {e}")
 
 

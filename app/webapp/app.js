@@ -47,6 +47,7 @@ const app = {
     phoneSaved: false,
     tradein: null,
     activeGiveawayId: null,
+    isAdmin: false,
 };
 
 function getCategoryIcon(name) {
@@ -93,12 +94,19 @@ function getAvailabilityLabel(p) {
     return null;
 }
 
+// Защита от старых записей в базе, где отсутствующие цвет/память могли
+// сохраниться как буквальная строка "None" (баг синка, уже исправлен на
+// бэкенде) — пока не прошёл следующий синк, не показываем такие значения.
+function _cleanField(v) {
+    return v && v !== 'None' ? v : null;
+}
+
 function getProductTags(p) {
     const tags = [];
     if (p.category && p.category.toLowerCase().includes('iphone')) tags.push('Apple');
     if (p.name.toLowerCase().includes('esim')) tags.push('eSIM');
-    if (p.color) tags.push(p.color);
-    if (p.memory) tags.push(p.memory);
+    if (_cleanField(p.color)) tags.push(p.color);
+    if (_cleanField(p.memory)) tags.push(p.memory);
     if (tags.length === 0) tags.push(p.category || 'Apple');
     return tags.slice(0, 4);
 }
@@ -128,6 +136,8 @@ function init() {
         app.user = app.tg.initDataUnsafe.user;
     }
 
+    checkAdmin();
+
     // bindEvents() должен выполниться в любом случае — иначе один упавший
     // запрос (например, каталог) обесточивает вообще все кнопки в приложении,
     // включая те экраны, для которых данные загрузились нормально.
@@ -143,6 +153,23 @@ function init() {
         }
         bindEvents();
     });
+}
+
+async function checkAdmin() {
+    // Кнопка админки скрыта по умолчанию (см. index.html) и показывается
+    // только если бэкенд подтвердил, что telegram_id из подписанного
+    // initData реально есть в списке админов — просто спрятать кнопку в JS
+    // было бы недостаточно, т.к. это не помешало бы открыть /admin напрямую
+    // (та страница защищена отдельным паролем, но кнопка не должна светиться
+    // всем подряд).
+    try {
+        const { ok, data } = await apiFetch('/me');
+        app.isAdmin = !!(ok && data && data.is_admin);
+    } catch (err) {
+        app.isAdmin = false;
+    }
+    const btn = document.getElementById('header-admin-btn');
+    if (btn) btn.style.display = app.isAdmin ? '' : 'none';
 }
 
 async function _fetchJsonArray(url) {
@@ -340,7 +367,7 @@ function renderProduct(productId) {
         specsHtml = `<div class="product-section"><div class="product-section-title">Характеристики</div><table class="product-specs"><tr><td>Модель</td><td>${escapeHtml(p.name)}</td></tr></table></div>`;
     }
 
-    const colorHtml = p.color ? `<div class="product-color-line"><span class="product-color-dot"></span> ${escapeHtml(p.color)}</div>` : '';
+    const colorHtml = _cleanField(p.color) ? `<div class="product-color-line"><span class="product-color-dot"></span> ${escapeHtml(p.color)}</div>` : '';
 
     container.innerHTML = `
         <div class="product-detail">
@@ -983,6 +1010,11 @@ function bindEvents() {
     document.getElementById('header-cart-btn').addEventListener('click', () => {
         renderCart();
         showScreen('cart');
+    });
+
+    document.getElementById('header-admin-btn').addEventListener('click', () => {
+        if (!app.isAdmin) return;
+        window.location.href = '/admin';
     });
 
     document.getElementById('cart-content').addEventListener('click', e => {

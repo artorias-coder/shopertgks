@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     GOOGLE_SHEETS_ID: str | None = None
     GOOGLE_CREDENTIALS_JSON: str | None = None
     GOOGLE_SYNC_INTERVAL_MINUTES: int = 5
+    # Секрет для вебхука мгновенного синка из Google Apps Script (onEdit),
+    # чтобы не ждать периодический опрос по таймеру. Без него эндпоинт
+    # /api/sync/webhook отключён.
+    GOOGLE_SHEETS_SYNC_TOKEN: str | None = None
 
     LIVESKLAD_API_TOKEN: str | None = None
     LIVESKLAD_API_LOGIN: str | None = None

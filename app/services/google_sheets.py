@@ -19,6 +19,16 @@ def _upsert_stmt(table):
 SHEET_EXPORT_URL = "https://docs.google.com/spreadsheets/d/{id}/export?format=csv"
 
 
+def _clean_str(value):
+    """str(None) == 'None' — обычный str(x) or None превращает отсутствующее
+    значение в буквальную строку 'None', которая потом всплывает в интерфейсе
+    ("AirPods 3 Original None None"). None должен оставаться None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _parse_price(value):
     if value is None or value == "":
         return None
@@ -118,7 +128,10 @@ def _parse_sheet_csv(content: str):
         memory = data.get("storage", "") or extract_memory(name)
         specs = get_specs(name)
         sim = data.get("sim", "")
-        display_name = f"{name} {memory} {color}".strip()
+        # f"{name} {memory} {color}" вставляет буквальный текст "None", если
+        # memory/color не определены (обычное дело — в таблице этих колонок
+        # нет вовсе) — отсюда "AirPods 3 Original None None" в заголовке.
+        display_name = " ".join(part for part in (name, memory, color) if part).strip()
         if sim:
             display_name += f" ({sim})"
 
@@ -200,19 +213,19 @@ async def sync_products(session: AsyncSession) -> dict:
                 product_status = ProductStatus.ACTIVE
 
             values = {
-                "livesklad_id": str(row.get("livesklad_id", "")) or None,
+                "livesklad_id": _clean_str(row.get("livesklad_id")),
                 "name": str(row.get("name", "")),
                 "category": str(row.get("category", "")),
-                "subcategory": str(row.get("subcategory", "")) or None,
-                "description": str(row.get("description", "")) or None,
-                "color": str(row.get("color", "")) or None,
-                "memory": str(row.get("memory", "")) or None,
+                "subcategory": _clean_str(row.get("subcategory")),
+                "description": _clean_str(row.get("description")),
+                "color": _clean_str(row.get("color")),
+                "memory": _clean_str(row.get("memory")),
                 "specs": row.get("specs") if isinstance(row.get("specs"), dict) else None,
                 "price": parse_price(row.get("price", 0)),
                 "old_price": parse_price(row.get("old_price")) if row.get("old_price") else None,
                 "discount": parse_price(row.get("discount")) if row.get("discount") else None,
                 "stock": int(row.get("stock", 0) or 0),
-                "photo_url": str(row.get("photo_url", "")) or None,
+                "photo_url": _clean_str(row.get("photo_url")),
                 "status": product_status,
             }
 
