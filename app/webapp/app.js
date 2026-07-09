@@ -87,6 +87,12 @@ function getProductImage(product, variant = 'card') {
     return getProductImagePlaceholder(product.category || product.name);
 }
 
+function getAvailabilityLabel(p) {
+    if (p.status === 'out_of_stock') return 'Отсутствует в наличии';
+    if (p.status === 'on_request') return 'Только по запросу';
+    return null;
+}
+
 function getProductTags(p) {
     const tags = [];
     if (p.category && p.category.toLowerCase().includes('iphone')) tags.push('Apple');
@@ -255,9 +261,13 @@ function renderCatalog(category, search = '') {
 
     grid.innerHTML = filtered.map(p => {
         const img = getProductImage(p, 'card');
-        const oldPrice = p.old_price
+        const availability = getAvailabilityLabel(p);
+        const oldPrice = (!availability && p.old_price)
             ? `<div class="product-old-price">${formatPrice(p.old_price)} ₽</div>`
             : '';
+        const priceHtml = availability
+            ? `<div class="product-availability product-availability-${p.status}">${availability}</div>`
+            : `<div class="product-price">${formatPrice(p.price)} ₽</div>`;
         const tags = getProductTags(p).map(t => `<span class="product-tag-small">${escapeHtml(t)}</span>`).join('');
         return `
         <div class="product-card" data-product-id="${p.id}">
@@ -265,7 +275,7 @@ function renderCatalog(category, search = '') {
             <div class="product-info">
                 <div class="product-name">${escapeHtml(p.name)}</div>
                 ${oldPrice}
-                <div class="product-price">${formatPrice(p.price)} ₽</div>
+                ${priceHtml}
                 <div class="product-tags-row">${tags}</div>
             </div>
         </div>
@@ -279,7 +289,8 @@ function renderProduct(productId) {
     const container = document.getElementById('product-detail');
     const img = getProductImage(p, 'detail');
 
-    const oldPrice = p.old_price
+    const availability = getAvailabilityLabel(p);
+    const oldPrice = (!availability && p.old_price)
         ? `<div class="product-detail-old-price">${formatPrice(p.old_price)} ₽</div>`
         : '';
 
@@ -312,8 +323,10 @@ function renderProduct(productId) {
             <div class="product-detail-body">
                 <div class="product-detail-name">${escapeHtml(p.name)}</div>
                 ${colorHtml}
-                <div class="product-detail-price">${formatPrice(p.price)} ₽</div>
-                <div class="product-detail-price-note">Цена указана за наличный расчёт</div>
+                ${availability
+                    ? `<div class="product-detail-availability product-detail-availability-${p.status}">${availability}</div>`
+                    : `<div class="product-detail-price">${formatPrice(p.price)} ₽</div>
+                <div class="product-detail-price-note">Цена указана за наличный расчёт</div>`}
                 ${oldPrice}
                 <div class="product-tags">${tags}</div>
 
@@ -325,8 +338,10 @@ function renderProduct(productId) {
                 ${specsHtml}
             </div>
             <div class="product-actions">
-                <button class="add-to-cart-btn" data-product-id="${p.id}">В корзину</button>
-                <button class="order-btn" data-product-id="${p.id}">Заказать</button>
+                ${p.status === 'out_of_stock' ? '' : `
+                ${p.status === 'on_request' ? '' : `<button class="add-to-cart-btn" data-product-id="${p.id}">В корзину</button>`}
+                <button class="order-btn" data-product-id="${p.id}">${p.status === 'on_request' ? 'Оставить заявку' : 'Заказать'}</button>
+                `}
             </div>
         </div>
     `;
@@ -417,6 +432,8 @@ function renderOrderForm() {
 }
 
 function addToCart(productId) {
+    const product = app.products.find(p => p.id === productId);
+    if (product && getAvailabilityLabel(product)) return; // нет в наличии / только по запросу
     const existing = app.cart.find(i => i.product_id === productId);
     if (existing) {
         existing.quantity += 1;
@@ -802,13 +819,14 @@ async function sendLead(source, { productId = null, message = null, silent = fal
 }
 
 function confirmProductOrder(product) {
+    const availability = getAvailabilityLabel(product);
     openSheet({
         title: 'Подтвердите заявку',
         text: 'После оформления заявки менеджер свяжется с вами в течение 5 минут в рабочее время.',
         bodyHtml: `
             <div class="sheet-product-card">
                 <div class="sheet-product-name">${escapeHtml(product.name)}</div>
-                <div class="sheet-product-price">${formatPrice(product.price)} ₽</div>
+                <div class="sheet-product-price">${availability || (formatPrice(product.price) + ' ₽')}</div>
             </div>
         `,
         confirmText: 'Отправить заявку',

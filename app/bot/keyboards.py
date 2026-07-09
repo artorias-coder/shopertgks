@@ -2,17 +2,6 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 from app.config import settings
 
 
-MAIN_MENU_CLIENT = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🛍 Каталог"), KeyboardButton(text="🔎 Поиск")],
-        [KeyboardButton(text="🔄 Trade-in"), KeyboardButton(text="🎁 Розыгрыши")],
-        [KeyboardButton(text="💰 Узнать лучшую цену"), KeyboardButton(text="💬 Написать менеджеру")],
-        [KeyboardButton(text="🛒 Корзина"), KeyboardButton(text="📦 Мои заказы")],
-    ],
-    resize_keyboard=True,
-)
-
-
 MAIN_MENU_ADMIN = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📦 Новые заявки"), KeyboardButton(text="🔄 Trade-in заявки")],
@@ -25,15 +14,14 @@ MAIN_MENU_ADMIN = ReplyKeyboardMarkup(
 
 
 def main_menu_inline():
-    buttons = [
-        [InlineKeyboardButton(text="🛍 Каталог", callback_data="catalog")],
-        [InlineKeyboardButton(text="🔄 Trade-in", callback_data="tradein")],
-        [InlineKeyboardButton(text="🎁 Розыгрыши", callback_data="giveaways")],
-        [InlineKeyboardButton(text="💰 Узнать лучшую цену", callback_data="best_price")],
-        [InlineKeyboardButton(text="💬 Написать менеджеру", callback_data="contact_manager")],
-    ]
+    # Каталог, trade-in, розыгрыши, корзина и заявки теперь полностью живут
+    # в Mini App — отдельное меню в чате бота больше не дублирует эти разделы.
     if settings.WEBAPP_URL:
-        buttons.append([InlineKeyboardButton(text="📱 Открыть Mini App", web_app=WebAppInfo(url=settings.WEBAPP_URL))])
+        buttons = [[InlineKeyboardButton(text="📱 Открыть KingStore", web_app=WebAppInfo(url=settings.WEBAPP_URL))]]
+    else:
+        # Резерв на случай, если WEBAPP_URL ещё не настроен на хостинге —
+        # чтобы бот не оставался без единой рабочей кнопки.
+        buttons = [[InlineKeyboardButton(text="💬 Написать менеджеру", callback_data="contact_manager")]]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

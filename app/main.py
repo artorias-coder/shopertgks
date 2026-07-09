@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pathlib import Path
+import asyncio
 import logging
 
 from app.database import engine, AsyncSessionLocal
@@ -18,6 +19,7 @@ INDEX_HTML = WEBAPP_DIR / "index.html"
 
 bot = None
 dp = None
+_sync_task = None
 
 app = FastAPI(title="KingStore API")
 
@@ -92,6 +94,26 @@ async def _migrate_columns(conn):
         logging.warning(f"Categories table migration skipped: {e}")
 
 
+async def _periodic_sync_loop():
+    """Фоновая синхронизация каталога с Google Sheets по таймеру.
+
+    Раньше синк запускался только один раз при старте процесса — данные
+    обновлялись лишь после ручного рестарта контейнера. Теперь каталог
+    подтягивается сам, без вмешательства.
+    """
+    from app.services.google_sheets import sync_products
+
+    interval = max(1, settings.GOOGLE_SYNC_INTERVAL_MINUTES) * 60
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            async with AsyncSessionLocal() as session:
+                stats = await sync_products(session)
+            logging.info(f"Google Sheets periodic sync: {stats}")
+        except Exception as e:
+            logging.error(f"Periodic Google Sheets sync failed: {e}")
+
+
 @app.on_event("startup")
 async def startup():
     try:
@@ -115,8 +137,9 @@ async def startup():
         # На хостингах без отдельного Celery-воркера (например, Bothost)
         # запланированная через .delay() синхронизация никогда не выполняется —
         # некому забрать задачу из очереди. Поэтому синхронизируем каталог с
-        # Google Sheets прямо при каждом старте приложения, чтобы данные не
-        # оставались навсегда устаревшими между ручными запусками из админки.
+        # Google Sheets прямо при каждом старте приложения, а дальше — по
+        # таймеру в фоне (см. _periodic_sync_loop), чтобы данные обновлялись
+        # сами, без ручного рестарта контейнера.
         try:
             from app.services.google_sheets import sync_products
 
@@ -125,6 +148,9 @@ async def startup():
             logging.info(f"Google Sheets sync at startup: {stats}")
         except Exception as e:
             logging.error(f"Google Sheets sync at startup failed: {e}")
+
+        global _sync_task
+        _sync_task = asyncio.create_task(_periodic_sync_loop())
 
     if settings.WEBHOOK_URL and settings.BOT_TOKEN:
         try:
@@ -145,7 +171,9 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    global bot
+    global bot, _sync_task
+    if _sync_task is not None:
+        _sync_task.cancel()
     if bot is not None:
         try:
             await bot.delete_webhook(drop_pending_updates=True)

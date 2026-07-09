@@ -100,6 +100,19 @@ def _parse_sheet_csv(content: str):
         if cash_price is None:
             continue
 
+        # Спецкоды вместо цены: 1 = товара нет в наличии, 2 = продаётся только
+        # под заказ. Это не реальная цена, поэтому обнуляем её и цену "было",
+        # а карточка товара на фронте показывает статус вместо суммы.
+        status_override = None
+        if cash_price == 1:
+            status_override = "out_of_stock"
+            cash_price = 0
+            card_price = None
+        elif cash_price == 2:
+            status_override = "on_request"
+            cash_price = 0
+            card_price = None
+
         category = _normalize_category(data.get("category", "iPhone"))
         color = extract_color(data.get("color", "")) or extract_color(name)
         memory = data.get("storage", "") or extract_memory(name)
@@ -141,8 +154,9 @@ def _parse_sheet_csv(content: str):
             "color": color,
             "memory": memory,
             "specs": specs,
-            "stock": 1,
+            "stock": 0 if status_override else 1,
             "photo_url": photo_url or None,
+            "status": status_override or "active",
         })
 
     return products
@@ -176,7 +190,14 @@ async def sync_products(session: AsyncSession) -> dict:
             seen_skus.add(sku)
 
             status = str(row.get("status", "active")).strip().lower()
-            product_status = ProductStatus(status) if status in ProductStatus.__members__ else ProductStatus.ACTIVE
+            try:
+                # ВАЖНО: ProductStatus.__members__ хранит ключи по ИМЕНИ ("ACTIVE"),
+                # а не по значению ("active") — старая проверка "status in __members__"
+                # никогда не срабатывала для строчных значений, поэтому статус из
+                # таблицы (out_of_stock/on_request/hidden) тут просто игнорировался.
+                product_status = ProductStatus(status)
+            except ValueError:
+                product_status = ProductStatus.ACTIVE
 
             values = {
                 "livesklad_id": str(row.get("livesklad_id", "")) or None,

@@ -30,6 +30,7 @@ class ProductStatus(str, enum.Enum):
     ACTIVE = "active"
     HIDDEN = "hidden"
     OUT_OF_STOCK = "out_of_stock"
+    ON_REQUEST = "on_request"
     ARCHIVED = "archived"
 
 

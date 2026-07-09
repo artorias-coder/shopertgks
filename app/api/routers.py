@@ -52,9 +52,15 @@ def verify_telegram_user(x_telegram_init_data: str | None = Header(default=None,
 router = APIRouter()
 
 
+# Товары с ценой-кодом 1/2 из таблицы (нет в наличии / только по запросу)
+# должны оставаться видимыми в каталоге — просто с меткой вместо цены.
+# HIDDEN и ARCHIVED — единственные статусы, которые реально скрывают товар.
+VISIBLE_PRODUCT_STATUSES = (ProductStatus.ACTIVE, ProductStatus.OUT_OF_STOCK, ProductStatus.ON_REQUEST)
+
+
 @router.get("/products")
 async def list_products(category: str | None = None, session: AsyncSession = Depends(get_db)):
-    stmt = select(Product).where(Product.status == ProductStatus.ACTIVE)
+    stmt = select(Product).where(Product.status.in_(VISIBLE_PRODUCT_STATUSES))
     if category:
         stmt = stmt.where(Product.category == category)
     result = await session.execute(stmt.order_by(Product.name))
@@ -127,7 +133,7 @@ async def list_categories(session: AsyncSession = Depends(get_db)):
     # Fallback: derive from products
     result = await session.execute(
         select(Product.category)
-        .where(Product.status == ProductStatus.ACTIVE)
+        .where(Product.status.in_(VISIBLE_PRODUCT_STATUSES))
         .group_by(Product.category)
         .order_by(Product.category)
     )
